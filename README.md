@@ -15,9 +15,12 @@ to SDR via the TIFF intermediate. jxc preserves HDR end-to-end by:
 - Decoding the JXR via jxrlib with the source pixel format preserved
   (16-bit fixed-point, 16-bit half-float, or 32-bit full-float per channel).
 - Embedding the source ICC profile in the JXL output when present.
-- Falling back to Rec.2020 + PQ color encoding when no ICC is present
-  (common for Windows HDR screenshots).
-- Lossless JXL encoding for v1 (no quantization artifacts).
+- Falling back to Rec.2020 + linear transfer when no ICC is present
+  (common for Windows HDR screenshots — viewers apply PQ at display time).
+- Detecting unused alpha channels in RGBA JXR files and encoding as RGB
+  to avoid transparent outputs.
+- Lossless JXL encoding by default, or lossy at a user-chosen
+  Butteraugli distance.
 
 ## Build
 
@@ -44,12 +47,27 @@ zig build run             # build + run with arguments
 ## Usage
 
 ```sh
-# Single file
+# Single file, visually lossless HDR (default)
 jxc input.jxr output.jxl
+
+# Lossless HDR (pass --distance 0.0; preserves pixels byte-for-byte)
+jxc --distance 0.0 input.jxr output.jxl
+
+# Aggressive lossy (very small file, some HDR quality loss)
+jxc --distance 4.0 input.jxr output.jxl
 
 # Batch (recursive directory walk)
 jxc /path/to/jxr/dir/ /path/to/jxl/out/
 ```
+
+### File size guide (3840×2160 HDR RGBA float screenshot, ~28 MB source)
+
+| `--distance` | Output size | Compression | Notes                                  |
+|--------------|-------------|-------------|----------------------------------------|
+| 1.0 (default)| 3.6 MB      | 15×         | visually lossless HDR                  |
+| 0.0          | 57 MB       | 1.7×        | lossless HDR (byte-exact)              |
+| 2.0          | 2.7 MB      | 19×         | lossy HDR                              |
+| 4.0+         | < 2 MB      | 25×+        | aggressive lossy HDR                   |
 
 Per-file output:
 

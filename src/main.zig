@@ -6,8 +6,8 @@
 //   jxc <input-dir/>          <output-dir/>              batch
 //
 // --distance <float>:
-//   0.0   lossless HDR (preserves pixels byte-for-byte; default)
-//   1.0   libjxl "visually lossless" (smaller, still HDR)
+//   1.0   libjxl "visually lossless" HDR (default; safe compression)
+//   0.0   lossless HDR (preserves pixels byte-for-byte; pass --distance 0.0)
 //   2.0+  increasingly lossy (smaller still)
 //   Higher values produce smaller files but with HDR quality loss.
 
@@ -43,7 +43,7 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
 
     // Parse args: optional --distance <f> before positional input/output.
-    var distance: f32 = 0.0;
+    var distance: f32 = 1.0;
     var positional_start: usize = 1;
     if (args.len >= 4 and std.mem.eql(u8, args[1], "--distance")) {
         distance = std.fmt.parseFloat(f32, args[2]) catch {
