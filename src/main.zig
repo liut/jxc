@@ -1,10 +1,15 @@
 // jxc — HDR JXR (and WDP/HDP) to JPEG XL converter.
 //
 // Modes:
-//   jxc <input.jxr>           <output.jxl>      single file
-//   jxc <input-dir/>          <output-dir/>     batch (recursive)
+//   jxc <input.jxr>           <output.jxl>               single file (lossless)
+//   jxc --distance <f> ...                                  same with quality knob
+//   jxc <input-dir/>          <output-dir/>              batch
 //
-// HDR is non-negotiable; SDR-only files are rejected (R1, plan Phase 3).
+// --distance <float>:
+//   0.0   lossless HDR (preserves pixels byte-for-byte; default)
+//   1.0   libjxl "visually lossless" (smaller, still HDR)
+//   2.0+  increasingly lossy (smaller still)
+//   Higher values produce smaller files but with HDR quality loss.
 
 const std = @import("std");
 const jxr = @import("jxr.zig");
@@ -15,10 +20,13 @@ const usage =
     \\jxc — HDR JXR (and WDP/HDP) to JPEG XL converter
     \\
     \\Usage:
-    \\  jxc <input.jxr>  <output.jxl>      single file
-    \\  jxc <input-dir/> <output-dir/>     batch (recursive)
+    \\  jxc [--distance <float>] <input.jxr>  <output.jxl>
+    \\  jxc [--distance <float>] <input-dir/> <output-dir/>
     \\
-    \\HDR is non-negotiable. SDR-only files will be rejected.
+    \\--distance controls HDR quality (libjxl Butteraugli distance):
+    \\  0.0   lossless (default; preserves pixels byte-for-byte)
+    \\  1.0   visually lossless (smaller, still HDR)
+    \\  2.0+  lower quality, smaller files
     \\
 ;
 
@@ -33,19 +41,36 @@ pub fn main(init: std.process.Init) !void {
     const stderr_writer = &stderr_writer_obj.interface;
 
     const args = try init.minimal.args.toSlice(init.arena.allocator());
-    if (args.len != 3) {
+
+    // Parse args: optional --distance <f> before positional input/output.
+    var distance: f32 = 0.0;
+    var positional_start: usize = 1;
+    if (args.len >= 4 and std.mem.eql(u8, args[1], "--distance")) {
+        distance = std.fmt.parseFloat(f32, args[2]) catch {
+            try stderr_writer.print("error: invalid --distance value: {s}\n", .{args[2]});
+            try stderr_writer.flush();
+            std.process.exit(2);
+        };
+        if (distance < 0.0) distance = 0.0;
+        positional_start = 3;
+    }
+
+    if (args.len != positional_start + 2) {
         try stderr_writer.writeAll(usage);
         try stderr_writer.flush();
         std.process.exit(2);
     }
 
-    const input_path = args[1];
-    const output_path = args[2];
+    const input_path = args[positional_start];
+    const output_path = args[positional_start + 1];
 
-    // Detect file vs directory by trying to open the path as a directory.
-    // If it succeeds → batch mode. If it fails → treat as single file.
+    if (distance > 0.0) {
+        try stdout_writer.print("quality: distance={d}\n", .{distance});
+        try stdout_writer.flush();
+    }
+
     if (std.Io.Dir.cwd().openDir(io, input_path, .{})) |_| {
-        const summary = batch.run(input_path, output_path, io, init.arena.allocator(), stdout_writer, stderr_writer) catch |err| {
+        const summary = batch.run(input_path, output_path, distance, io, init.arena.allocator(), stdout_writer, stderr_writer) catch |err| {
             try stderr_writer.print("error: batch failed: {s}\n", .{@errorName(err)});
             try stderr_writer.flush();
             std.process.exit(1);
@@ -69,7 +94,7 @@ pub fn main(init: std.process.Init) !void {
         });
         try stdout_writer.flush();
 
-        jxl.encode(decoded, output_path, init.arena.allocator()) catch |err| {
+        jxl.encode(decoded, output_path, distance, init.arena.allocator()) catch |err| {
             try stderr_writer.print("error: encode failed for {s}: {s}\n", .{ output_path, @errorName(err) });
             try stderr_writer.flush();
             std.process.exit(1);

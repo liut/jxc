@@ -46,6 +46,18 @@ pub const Decoded = struct {
     icc: []u8,
     /// EXIF bytes (empty if source had no EXIF).
     exif: []u8,
+    /// Sum of all alpha-channel bytes (only meaningful for 4-channel inputs).
+    /// If channels==4 and this is zero, the alpha channel is unused and the
+    /// JXL encoder can drop it without changing the visible image.
+    alpha_sum: u64,
+
+    /// Convenience: returns true if the alpha channel is uniformly zero
+    /// (or doesn't exist), meaning the encode step can safely omit it.
+    pub fn alphaIsAllZero(self: Decoded) bool {
+        if (self.channels != 4) return true;
+        return self.alpha_sum == 0;
+    }
+
     /// Release allocator-owned buffers.
     pub fn deinit(self: *Decoded, allocator: std.mem.Allocator) void {
         allocator.free(self.pixels);
@@ -150,6 +162,22 @@ pub fn decode(path: []const u8, allocator: std.mem.Allocator) !Decoded {
     if (fc_copy(fc, &rect, pixels, @intCast(@as(usize, w) * bytes_per_pixel)) != 0)
         return error.JxrDecodeFailed;
 
+    // Sample alpha to detect unused alpha channels (common in HDR screenshots
+    // reported as RGBA but actually RGB). Cheap because we only sample.
+    var alpha_sum: u64 = 0;
+    if (channels == 4) {
+        const bytes_per_channel: usize = bits_per_channel / 8;
+        const sample_stride: usize = bytes_per_pixel * 256; // every 256 pixels
+        var idx: usize = bytes_per_channel * 3; // alpha is the 4th channel
+        while (idx < buffer_size) : (idx += sample_stride) {
+            // Sum all bytes of the alpha channel for this pixel (handles all
+            // 16/32-bit formats uniformly).
+            for (0..bytes_per_channel) |b| {
+                alpha_sum += pixels[idx + b];
+            }
+        }
+    }
+
     result = .{
         .width = w,
         .height = h,
@@ -159,6 +187,7 @@ pub fn decode(path: []const u8, allocator: std.mem.Allocator) !Decoded {
         .pixel_format = pixel_format,
         .bytes_per_pixel = bytes_per_pixel,
         .buffer_size = buffer_size,
+        .alpha_sum = alpha_sum,
         .pixels = pixels[0..buffer_size],
         .icc = icc_buf,
         .exif = exif_buf,

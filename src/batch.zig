@@ -27,6 +27,7 @@ pub const BatchSummary = struct {
 pub fn run(
     input_dir: []const u8,
     output_dir: []const u8,
+    distance: f32,
     io: std.Io,
     allocator: std.mem.Allocator,
     stdout_writer: *std.Io.Writer,
@@ -73,7 +74,7 @@ pub fn run(
         const renamed = try rewriteExtToJxl(allocator, output_path);
         defer allocator.free(renamed);
 
-        const result = convertOne(input_path, renamed, allocator, stdout_writer, stderr_writer);
+        const result = convertOne(input_path, renamed, distance, allocator, stdout_writer, stderr_writer);
         switch (result) {
             .success => {
                 succeeded += 1;
@@ -107,6 +108,7 @@ pub fn run(
 fn convertOne(
     input_path: []const u8,
     output_path: []const u8,
+    distance: f32,
     allocator: std.mem.Allocator,
     stdout_writer: *std.Io.Writer,
     stderr_writer: *std.Io.Writer,
@@ -127,7 +129,7 @@ fn convertOne(
     }) catch {};
     stdout_writer.flush() catch {};
 
-    jxl.encode(decoded, output_path, allocator) catch |err| {
+    jxl.encode(decoded, output_path, distance, allocator) catch |err| {
         stderr_writer.print("{s}: error: encode: {s}\n", .{ output_path, @errorName(err) }) catch {};
         stderr_writer.flush() catch {};
         return .failed;
