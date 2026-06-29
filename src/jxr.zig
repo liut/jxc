@@ -68,11 +68,20 @@ pub fn decode(path: []const u8, allocator: std.mem.Allocator) !Decoded {
     var p_fc: ?*jxrlib.PKFormatConverter = null;
     var pixels: [*]u8 = undefined;
     var icc_buf: []u8 = &[_]u8{};
-    var exif_buf: []u8 = &[_]u8{};
     var result: Decoded = undefined;
     var buffer_size: usize = 0;
+    // exif_buf removed: see comment below about jxrlib EXIF fragility.
+    const exif_buf: []u8 = &[_]u8{};
 
-    errdefer cleanup(allocator, buffer_size, &p_fc, &p_decoder, &p_codec_fact, &p_factory, pixels, icc_buf, exif_buf);
+    // On error paths, skip the jxrlib Release calls — the decoder is in an
+    // indeterminate state and Release can crash with bus errors on partial
+    // initialization. Memory leaks in the error path are acceptable; OS reclaims
+    // everything on exit.
+    var errored = false;
+    errdefer {
+        errored = true;
+        cleanup(allocator, buffer_size, &p_fc, &p_decoder, &p_codec_fact, &p_factory, pixels, icc_buf, exif_buf, errored);
+    }
 
     // Factories
     if (jxrlib.PKCreateFactory(&p_factory, jxrlib.PK_SDK_VERSION) != 0)
@@ -116,15 +125,10 @@ pub fn decode(path: []const u8, allocator: std.mem.Allocator) !Decoded {
             return error.JxrIccReadFailed;
     }
 
-    // EXIF (two-call)
-    var exif_size: u32 = 0;
-    _ = jxrlib.PKImageDecode_GetEXIFMetadata_WMP(decoder, null, &exif_size);
-    if (exif_size > 0) {
-        exif_buf = try allocator.alloc(u8, exif_size);
-        var sz: u32 = exif_size;
-        if (jxrlib.PKImageDecode_GetEXIFMetadata_WMP(decoder, exif_buf.ptr, &sz) != 0)
-            return error.JxrExifReadFailed;
-    }
+    // EXIF (two-call) — Phase 5 enhancement, currently disabled due to a
+// jxrlib assertion on its error-handling path. The release branch
+// (4creators/jxrlib @ f752187) has known fragility around
+// FreeDescMetadata when EXIF extraction is requested. Not critical for v1.
 
     // Allocate pixel buffer via jxrlib's aligned allocator (SIMD alignment).
     if (jxrlib.PKAllocAligned(@ptrCast(&pixels), buffer_size, 16) != 0)
@@ -172,18 +176,27 @@ fn cleanup(
     pixels: [*]u8,
     icc_buf: []u8,
     exif_buf: []u8,
+    errored: bool,
 ) void {
     if (p_fc.*) |fc| {
-        if (fc.Release) |rel| _ = rel(@ptrCast(fc));
+        if (fc.Release) |rel| {
+            if (!errored) _ = rel(@ptrCast(fc));
+        }
     }
     if (p_decoder.*) |d| {
-        if (d.Release) |rel| _ = rel(@ptrCast(d));
+        if (d.Release) |rel| {
+            if (!errored) _ = rel(@ptrCast(d));
+        }
     }
     if (p_codec_fact.*) |cf| {
-        if (cf.Release) |rel| _ = rel(@ptrCast(cf));
+        if (cf.Release) |rel| {
+            if (!errored) _ = rel(@ptrCast(cf));
+        }
     }
     if (p_factory.*) |f| {
-        if (f.Release) |rel| _ = rel(@ptrCast(f));
+        if (f.Release) |rel| {
+            if (!errored) _ = rel(@ptrCast(f));
+        }
     }
     if (buffer_size > 0) {
         var p: [*]u8 = pixels;

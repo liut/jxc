@@ -1,15 +1,15 @@
 
 //*@@@+++@@@@******************************************************************
 //
-// Copyright © Microsoft Corp.
+// Copyright ï¿½ Microsoft Corp.
 // All rights reserved.
 // 
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
 // 
-// • Redistributions of source code must retain the above copyright notice,
+// ï¿½ Redistributions of source code must retain the above copyright notice,
 //   this list of conditions and the following disclaimer.
-// • Redistributions in binary form must reproduce the above copyright notice,
+// ï¿½ Redistributions in binary form must reproduce the above copyright notice,
 //   this list of conditions and the following disclaimer in the documentation
 //   and/or other materials provided with the distribution.
 // 
@@ -190,13 +190,17 @@ void FreeDescMetadata(DPKPROPVARIANT *pvar)
             PKFree((void **) &pvar->VT.pwszVal);
             break;
 
-        default:
-            assert(FALSE); // This case is not handled
-            break;
-
         case DPKVT_EMPTY:
         case DPKVT_UI2:
         case DPKVT_UI4:
+            break;
+
+        default:
+            // Patched: 4creators/jxrlib asserts here on any DPKVT type
+            // outside the short list above (UI1, BOOL, etc.). Real Windows
+            // HDR JXR files commonly use these unhandled types. Treat as
+            // no-op rather than crash â€” the metadata slot is released either
+            // way.
             break;
     }
 }

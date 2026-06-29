@@ -1,20 +1,22 @@
-// jxc — HDR JXR (and WDP/HDP) to JPEG XL batch converter.
+// jxc — HDR JXR (and WDP/HDP) to JPEG XL converter.
 //
-// Phase 3: single-file mode.
-//   jxc input.jxr output.jxl
+// Modes:
+//   jxc <input.jxr>           <output.jxl>      single file
+//   jxc <input-dir/>          <output-dir/>     batch (recursive)
 //
-// Phase 4 will add batch mode (directory in / directory out).
+// HDR is non-negotiable; SDR-only files are rejected (R1, plan Phase 3).
 
 const std = @import("std");
 const jxr = @import("jxr.zig");
 const jxl = @import("jxl.zig");
+const batch = @import("batch.zig");
 
 const usage =
     \\jxc — HDR JXR (and WDP/HDP) to JPEG XL converter
     \\
     \\Usage:
-    \\  jxc <input.jxr>  <output.jxl>
-    \\  jxc <input-dir/> <output-dir/>   (Phase 4)
+    \\  jxc <input.jxr>  <output.jxl>      single file
+    \\  jxc <input-dir/> <output-dir/>     batch (recursive)
     \\
     \\HDR is non-negotiable. SDR-only files will be rejected.
     \\
@@ -40,29 +42,40 @@ pub fn main(init: std.process.Init) !void {
     const input_path = args[1];
     const output_path = args[2];
 
-    const decoded = jxr.decode(input_path, init.arena.allocator()) catch |err| {
-        try stderr_writer.print("error: decode failed for {s}: {s}\n", .{ input_path, @errorName(err) });
-        try stderr_writer.flush();
-        std.process.exit(1);
-    };
+    // Detect file vs directory by trying to open the path as a directory.
+    // If it succeeds → batch mode. If it fails → treat as single file.
+    if (std.Io.Dir.cwd().openDir(io, input_path, .{})) |_| {
+        const summary = batch.run(input_path, output_path, io, init.arena.allocator(), stdout_writer, stderr_writer) catch |err| {
+            try stderr_writer.print("error: batch failed: {s}\n", .{@errorName(err)});
+            try stderr_writer.flush();
+            std.process.exit(1);
+        };
+        std.process.exit(if (summary.failed == 0) 0 else 1);
+    } else |_| {
+        const decoded = jxr.decode(input_path, init.arena.allocator()) catch |err| {
+            try stderr_writer.print("error: decode failed for {s}: {s}\n", .{ input_path, @errorName(err) });
+            try stderr_writer.flush();
+            std.process.exit(1);
+        };
 
-    try stdout_writer.print("{s}: {d}x{d} {d}bpc exp={d} ch={d} icc={d}B\n", .{
-        input_path,
-        decoded.width,
-        decoded.height,
-        decoded.bits_per_channel,
-        decoded.exponent_bits,
-        decoded.channels,
-        decoded.icc.len,
-    });
-    try stdout_writer.flush();
+        try stdout_writer.print("{s}: {d}x{d} {d}bpc exp={d} ch={d} icc={d}B\n", .{
+            input_path,
+            decoded.width,
+            decoded.height,
+            decoded.bits_per_channel,
+            decoded.exponent_bits,
+            decoded.channels,
+            decoded.icc.len,
+        });
+        try stdout_writer.flush();
 
-    jxl.encode(decoded, output_path, init.arena.allocator()) catch |err| {
-        try stderr_writer.print("error: encode failed for {s}: {s}\n", .{ output_path, @errorName(err) });
-        try stderr_writer.flush();
-        std.process.exit(1);
-    };
+        jxl.encode(decoded, output_path, init.arena.allocator()) catch |err| {
+            try stderr_writer.print("error: encode failed for {s}: {s}\n", .{ output_path, @errorName(err) });
+            try stderr_writer.flush();
+            std.process.exit(1);
+        };
 
-    try stdout_writer.print("{s}: ok\n", .{output_path});
-    try stdout_writer.flush();
+        try stdout_writer.print("{s}: ok\n", .{output_path});
+        try stdout_writer.flush();
+    }
 }
