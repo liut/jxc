@@ -1,33 +1,68 @@
 // jxc — HDR JXR (and WDP/HDP) to JPEG XL batch converter.
 //
-// Phase 2 stub: confirms the static build pipeline works. Prints version
-// and confirms both translated C modules are importable. The real HDR
-// pipeline lands in Phase 3.
+// Phase 3: single-file mode.
+//   jxc input.jxr output.jxl
+//
+// Phase 4 will add batch mode (directory in / directory out).
 
 const std = @import("std");
+const jxr = @import("jxr.zig");
+const jxl = @import("jxl.zig");
 
-// Imported as Zig modules via `addTranslateC` in build.zig. Touching the
-// values forces a compile error if translate-c fails — useful sanity
-// check that the C interop pipeline works end to end.
-const jxrlib = @import("jxrlib");
-const jxl = @import("jxl");
+const usage =
+    \\jxc — HDR JXR (and WDP/HDP) to JPEG XL converter
+    \\
+    \\Usage:
+    \\  jxc <input.jxr>  <output.jxl>
+    \\  jxc <input-dir/> <output-dir/>   (Phase 4)
+    \\
+    \\HDR is non-negotiable. SDR-only files will be rejected.
+    \\
+;
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     var stdout_buffer: [4096]u8 = undefined;
-    var stdout_file_writer: std.Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
-    const stdout_writer = &stdout_file_writer.interface;
+    var stdout_writer_obj: std.Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
+    const stdout_writer = &stdout_writer_obj.interface;
 
-    // Touch a constant from each translated module so a missing symbol
-    // surfaces here rather than as an opaque linker error.
-    try stdout_writer.print("jxc 0.1.0 (dev)\n", .{});
-    try stdout_writer.print("jxrlib: GUID_PKPixelFormatDontCare = {{...}}\n", .{});
-    try stdout_writer.print("jxl:    JXL_TRANSFER_FUNCTION_PQ = {d}\n", .{jxl.JXL_TRANSFER_FUNCTION_PQ});
+    var stderr_buffer: [4096]u8 = undefined;
+    var stderr_writer_obj: std.Io.File.Writer = .init(.stderr(), io, &stderr_buffer);
+    const stderr_writer = &stderr_writer_obj.interface;
 
-    // Reference jxrlib symbols via their address (no-op, but compiler
-    // verifies the symbol exists). Suppress unused warnings.
-    _ = jxrlib.PK_SDK_VERSION;
-    _ = jxl.JXL_ENC_FRAME_SETTING_EFFORT;
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    if (args.len != 3) {
+        try stderr_writer.writeAll(usage);
+        try stderr_writer.flush();
+        std.process.exit(2);
+    }
 
+    const input_path = args[1];
+    const output_path = args[2];
+
+    const decoded = jxr.decode(input_path, init.arena.allocator()) catch |err| {
+        try stderr_writer.print("error: decode failed for {s}: {s}\n", .{ input_path, @errorName(err) });
+        try stderr_writer.flush();
+        std.process.exit(1);
+    };
+
+    try stdout_writer.print("{s}: {d}x{d} {d}bpc exp={d} ch={d} icc={d}B\n", .{
+        input_path,
+        decoded.width,
+        decoded.height,
+        decoded.bits_per_channel,
+        decoded.exponent_bits,
+        decoded.channels,
+        decoded.icc.len,
+    });
+    try stdout_writer.flush();
+
+    jxl.encode(decoded, output_path, init.arena.allocator()) catch |err| {
+        try stderr_writer.print("error: encode failed for {s}: {s}\n", .{ output_path, @errorName(err) });
+        try stderr_writer.flush();
+        std.process.exit(1);
+    };
+
+    try stdout_writer.print("{s}: ok\n", .{output_path});
     try stdout_writer.flush();
 }

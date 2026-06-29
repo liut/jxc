@@ -143,7 +143,7 @@ pub fn build(b: *std.Build) void {
             .link_libcpp = true,
             .imports = &.{
                 .{ .name = "jxrlib", .module = jxrlib_translate.createModule() },
-                .{ .name = "jxl", .module = libjxl_translate.createModule() },
+                .{ .name = "libjxl", .module = libjxl_translate.createModule() },
             },
         }),
     });
@@ -153,13 +153,14 @@ pub fn build(b: *std.Build) void {
     inline for (jxrlib_archive_paths) |p| root_mod.addObjectFile(p);
     inline for (libjxl_archive_paths) |p| root_mod.addObjectFile(p);
 
-    // libjxl has transitive dependencies on brotli + lcms2 (system libs
+    // libjxl has transitive dependencies on brotli + lcms2 + hwy (system libs
     // in this dev build; Phase 5 will switch to vendored copies for true
     // static distribution).
     root_mod.linkSystemLibrary("brotlienc", .{});
     root_mod.linkSystemLibrary("brotlidec", .{});
     root_mod.linkSystemLibrary("brotlicommon", .{});
     root_mod.linkSystemLibrary("lcms2", .{});
+    root_mod.linkSystemLibrary("hwy", .{});
 
     b.installArtifact(exe);
 
