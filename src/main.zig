@@ -1,15 +1,15 @@
 // jxc — HDR JXR (and WDP/HDP) to JPEG XL converter.
 //
 // Modes:
-//   jxc <input.jxr>           <output.jxl>               single file (lossless)
-//   jxc --distance <f> ...                                  same with quality knob
+//   jxc <input.jxr>           <output.jxl>               single file, HDR (default)
+//   jxc <input.jxr>                                       single file, output = <input>.jxl
 //   jxc <input-dir/>          <output-dir/>              batch
+//   jxc <input-dir/>                                      batch, output = input-dir (in-place)
 //
-// --distance <float>:
-//   1.0   libjxl "visually lossless" HDR (default; safe compression)
-//   0.0   lossless HDR (preserves pixels byte-for-byte; pass --distance 0.0)
-//   2.0+  increasingly lossy (smaller still)
-//   Higher values produce smaller files but with HDR quality loss.
+// Safe defaults:
+//   - If output is omitted: single-file uses <input-stem>.jxl; batch uses
+//     input-dir as output-dir (so batch can convert in-place).
+//   - Existing output files are NOT overwritten. Skipped with a warning.
 
 const std = @import("std");
 const jxr = @import("jxr.zig");
@@ -20,12 +20,21 @@ const usage =
     \\jxc — HDR JXR (and WDP/HDP) to JPEG XL converter
     \\
     \\Usage:
-    \\  jxc [--distance <float>] <input.jxr>  <output.jxl>
-    \\  jxc [--distance <float>] <input-dir/> <output-dir/>
+    \\  jxc [--sdr] [--distance <float>] <input.jxr>  [<output.jxl>]
+    \\  jxc [--sdr] [--distance <float>] <input-dir/> [<output-dir/>]
     \\
-    \\--distance controls HDR quality (libjxl Butteraugli distance):
-    \\  0.0   lossless (default; preserves pixels byte-for-byte)
-    \\  1.0   visually lossless (smaller, still HDR)
+    \\If output is omitted:
+    \\  single file → <input>.jxl in same directory
+    \\  batch       → output-dir = input-dir (in-place conversion)
+    \\
+    \\Existing output files are skipped (not overwritten).
+    \\
+    \\--sdr: 8-bit sRGB output (for sRGB displays, applies HDR→SDR tone mapping)
+    \\        default: 32-bit HDR Rec.2020 + linear (for HDR displays)
+    \\
+    \\--distance controls quality (libjxl Butteraugli distance):
+    \\  1.0   visually lossless HDR (default for HDR mode)
+    \\  0.0   lossless (pixel-byte-exact)
     \\  2.0+  lower quality, smaller files
     \\
 ;
@@ -42,27 +51,43 @@ pub fn main(init: std.process.Init) !void {
 
     const args = try init.minimal.args.toSlice(init.arena.allocator());
 
-    // Parse args: optional --distance <f> before positional input/output.
+    // Parse optional flags before positional input/output.
     var distance: f32 = 1.0;
+    var target: jxl.Target = .hdr;
     var positional_start: usize = 1;
-    if (args.len >= 4 and std.mem.eql(u8, args[1], "--distance")) {
-        distance = std.fmt.parseFloat(f32, args[2]) catch {
-            try stderr_writer.print("error: invalid --distance value: {s}\n", .{args[2]});
-            try stderr_writer.flush();
-            std.process.exit(2);
-        };
-        if (distance < 0.0) distance = 0.0;
-        positional_start = 3;
+    while (positional_start < args.len) {
+        if (std.mem.eql(u8, args[positional_start], "--distance")) {
+            if (positional_start + 1 >= args.len) {
+                try stderr_writer.writeAll("error: --distance requires a value\n");
+                try stderr_writer.flush();
+                std.process.exit(2);
+            }
+            distance = std.fmt.parseFloat(f32, args[positional_start + 1]) catch {
+                try stderr_writer.print("error: invalid --distance value: {s}\n", .{args[positional_start + 1]});
+                try stderr_writer.flush();
+                std.process.exit(2);
+            };
+            if (distance < 0.0) distance = 0.0;
+            positional_start += 2;
+        } else if (std.mem.eql(u8, args[positional_start], "--sdr")) {
+            target = .sdr;
+            positional_start += 1;
+        } else {
+            break;
+        }
     }
 
-    if (args.len != positional_start + 2) {
+    if (args.len != positional_start + 1 and args.len != positional_start + 2) {
         try stderr_writer.writeAll(usage);
         try stderr_writer.flush();
         std.process.exit(2);
     }
 
     const input_path = args[positional_start];
-    const output_path = args[positional_start + 1];
+    const output_path = if (args.len == positional_start + 2)
+        args[positional_start + 1]
+    else
+        try defaultOutputPath(init.arena.allocator(), io, input_path);
 
     if (distance > 0.0) {
         try stdout_writer.print("quality: distance={d}\n", .{distance});
@@ -70,7 +95,7 @@ pub fn main(init: std.process.Init) !void {
     }
 
     if (std.Io.Dir.cwd().openDir(io, input_path, .{})) |_| {
-        const summary = batch.run(input_path, output_path, distance, io, init.arena.allocator(), stdout_writer, stderr_writer) catch |err| {
+        const summary = batch.run(input_path, output_path, distance, target, io, init.arena.allocator(), stdout_writer, stderr_writer) catch |err| {
             try stderr_writer.print("error: batch failed: {s}\n", .{@errorName(err)});
             try stderr_writer.flush();
             std.process.exit(1);
@@ -83,7 +108,7 @@ pub fn main(init: std.process.Init) !void {
             std.process.exit(1);
         };
 
-        try stdout_writer.print("{s}: {d}x{d} {d}bpc exp={d} ch={d} icc={d}B\n", .{
+        try stdout_writer.print("{s}: {d}x{d} {d}bpc exp={d} ch={d} icc={d}B target={s}\n", .{
             input_path,
             decoded.width,
             decoded.height,
@@ -91,10 +116,11 @@ pub fn main(init: std.process.Init) !void {
             decoded.exponent_bits,
             decoded.channels,
             decoded.icc.len,
+            @tagName(target),
         });
         try stdout_writer.flush();
 
-        jxl.encode(decoded, output_path, distance, init.arena.allocator()) catch |err| {
+        jxl.encode(decoded, output_path, distance, target, init.arena.allocator()) catch |err| {
             try stderr_writer.print("error: encode failed for {s}: {s}\n", .{ output_path, @errorName(err) });
             try stderr_writer.flush();
             std.process.exit(1);
@@ -102,5 +128,24 @@ pub fn main(init: std.process.Init) !void {
 
         try stdout_writer.print("{s}: ok\n", .{output_path});
         try stdout_writer.flush();
+    }
+}
+
+/// Default output path when not specified:
+///   single file: <input-stem>.jxl in same directory
+///   directory: returns the input path itself (caller uses for in-place conversion)
+fn defaultOutputPath(allocator: std.mem.Allocator, io: std.Io, input: []const u8) ![]u8 {
+    // Detect directory vs file: try to open as dir.
+    if (std.Io.Dir.cwd().openDir(io, input, .{})) |_| {
+        // Directory input → batch mode uses input as output dir.
+        return try allocator.dupe(u8, input);
+    } else |_| {
+        // File input → strip extension, append .jxl.
+        const ext = std.fs.path.extension(input);
+        const stem_len = input.len - ext.len;
+        const out = try allocator.alloc(u8, stem_len + 4);
+        @memcpy(out[0..stem_len], input[0..stem_len]);
+        @memcpy(out[stem_len..][0..4], ".jxl");
+        return out;
     }
 }

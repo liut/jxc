@@ -37,9 +37,12 @@ int main(int argc, char** argv) {
     }
 
     JxlBasicInfo info;
-    JxlPixelFormat pix_fmt = { 3, JXL_TYPE_FLOAT, JXL_NATIVE_ENDIAN, 0 };
+    // Use UINT8 output so we see what's literally in the file (no inverse
+    // gamma applied by the decoder). For SDR-mode JXLs this is the raw
+    // sRGB-encoded 8-bit value.
+    JxlPixelFormat pix_fmt = { 3, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
     int got_full = 0;
-    float* pixels = NULL;
+    uint8_t* pixels = NULL;
 
     JxlDecoderSetInput(dec, data, size);
     JxlDecoderCloseInput(dec);
@@ -62,6 +65,7 @@ int main(int argc, char** argv) {
                 fprintf(stderr, "out buf size failed\n");
                 return 1;
             }
+            fprintf(stdout, "buf_size: %zu (%.1f MB)\n", buf_size, buf_size / (1024.0*1024.0));
             pixels = malloc(buf_size);
             if (JxlDecoderSetImageOutBuffer(dec, &pix_fmt, pixels, buf_size) != JXL_DEC_SUCCESS) {
                 fprintf(stderr, "set out buf failed\n");
@@ -83,33 +87,31 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Print pixel stats
+    // Print pixel stats (8-bit values, 0-255)
     size_t N = info.xsize * info.ysize;
-    float rmin = 1e30f, rmax = -1e30f;
-    float gmin = 1e30f, gmax = -1e30f;
-    float bmin = 1e30f, bmax = -1e30f;
+    int rmin = 256, rmax = -1, gmin = 256, gmax = -1, bmin = 256, bmax = -1;
     for (size_t i = 0; i < N; i += 100) {
-        float r = pixels[i*3 + 0];
-        float g = pixels[i*3 + 1];
-        float b = pixels[i*3 + 2];
+        int r = pixels[i*3 + 0];
+        int g = pixels[i*3 + 1];
+        int b = pixels[i*3 + 2];
         if (r < rmin) rmin = r; if (r > rmax) rmax = r;
         if (g < gmin) gmin = g; if (g > gmax) gmax = g;
         if (b < bmin) bmin = b; if (b > bmax) bmax = b;
     }
-    fprintf(stdout, "Decoded RGB stats: R=[%.4f, %.4f] G=[%.4f, %.4f] B=[%.4f, %.4f]\n", rmin, rmax, gmin, gmax, bmin, bmax);
+    fprintf(stdout, "Decoded 8-bit RGB stats: R=[%d, %d] G=[%d, %d] B=[%d, %d]\n", rmin, rmax, gmin, gmax, bmin, bmax);
     fprintf(stdout, "Spot pixels (row 0):\n");
     for (int col = 0; col < 5; col++) {
         int x = col * 800;
         if (x >= info.xsize) break;
-        float* px = &pixels[x * 3];
-        fprintf(stdout, "  [%4d,0] R=%.6f G=%.6f B=%.6f\n", x, px[0], px[1], px[2]);
+        uint8_t* px = &pixels[x * 3];
+        fprintf(stdout, "  [%4d,0] R=%3d G=%3d B=%3d\n", x, px[0], px[1], px[2]);
     }
     fprintf(stdout, "Spot pixels (row 1080):\n");
     for (int col = 0; col < 5; col++) {
         int x = col * 800;
         if (x >= info.xsize) break;
-        float* px = &pixels[(1080 * info.xsize + x) * 3];
-        fprintf(stdout, "  [%4d,1080] R=%.6f G=%.6f B=%.6f\n", x, px[0], px[1], px[2]);
+        uint8_t* px = &pixels[(1080 * info.xsize + x) * 3];
+        fprintf(stdout, "  [%4d,1080] R=%3d G=%3d B=%3d\n", x, px[0], px[1], px[2]);
     }
 
     free(pixels);
