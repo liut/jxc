@@ -10,6 +10,9 @@ vendor/libjxl/build/
 
 # v0 test artifacts (binary + transient output)
 /tools/v0_decode_test
+/tools/inspect_pixels
+/tools/inspect_jxl
+/tmp.jxl
 
 # OS junk
 .DS_Store
