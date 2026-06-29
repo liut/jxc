@@ -1,0 +1,11 @@
+size: 3840x2160
+pixel_format: 128bppRGBAFloat (hdr=yes)
+icc_size: 0 bytes
+exif_size: 0 bytes
+cbit_unit: 128
+channels: 4
+bit_depth: 7 (BD_16S=3 BD_16F=4 BD_32S=6 BD_32F=7)
+bpp: 64, stride: 245760, buffer_size: 530841600 (~506.2 MB)
+pixel_scan: zero=23760 nonzero=8640 (sampled every 256 pixels)
+verification: PASS (HDR decode ok, ICC empty — will use default Rec.2020+PQ at encode time)
+EXIT=0
