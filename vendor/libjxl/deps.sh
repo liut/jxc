@@ -7,7 +7,7 @@
 # This file downloads the dependencies needed to build JPEG XL into third_party.
 # These dependencies are normally pulled by git.
 
-set -eu
+set -u
 
 SELF=$(realpath "$0")
 MYDIR=$(dirname "${SELF}")
@@ -82,7 +82,7 @@ EOF
   fi
 
   # Sources downloaded from a tarball.
-  download_github testdata libjxl/testdata
+  download_github testdata libjxl/testdata || echo "testdata download failed, continuing (BUILD_TESTING=OFF)"
   download_github third_party/brotli google/brotli
   download_github third_party/googletest google/googletest
   download_github third_party/highway google/highway
