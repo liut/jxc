@@ -1,71 +1,33 @@
-const std = @import("std");
-const Io = std.Io;
+// jxc — HDR JXR (and WDP/HDP) to JPEG XL batch converter.
+//
+// Phase 2 stub: confirms the static build pipeline works. Prints version
+// and confirms both translated C modules are importable. The real HDR
+// pipeline lands in Phase 3.
 
-const jxc = @import("jxc");
+const std = @import("std");
+
+// Imported as Zig modules via `addTranslateC` in build.zig. Touching the
+// values forces a compile error if translate-c fails — useful sanity
+// check that the C interop pipeline works end to end.
+const jxrlib = @import("jxrlib");
+const jxl = @import("jxl");
 
 pub fn main(init: std.process.Init) !void {
-    // Prints to stderr, unbuffered, ignoring potential errors.
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-
-    // This is appropriate for anything that lives as long as the process.
-    const arena: std.mem.Allocator = init.arena.allocator();
-
-    // Accessing command line arguments:
-    const args = try init.minimal.args.toSlice(arena);
-    for (args) |arg| {
-        std.log.info("arg: {s}", .{arg});
-    }
-
-    // In order to do I/O operations need an `Io` instance.
     const io = init.io;
-
-    // Stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout_file_writer: std.Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
     const stdout_writer = &stdout_file_writer.interface;
 
-    try jxc.printAnotherMessage(stdout_writer);
+    // Touch a constant from each translated module so a missing symbol
+    // surfaces here rather than as an opaque linker error.
+    try stdout_writer.print("jxc 0.1.0 (dev)\n", .{});
+    try stdout_writer.print("jxrlib: GUID_PKPixelFormatDontCare = {{...}}\n", .{});
+    try stdout_writer.print("jxl:    JXL_TRANSFER_FUNCTION_PQ = {d}\n", .{jxl.JXL_TRANSFER_FUNCTION_PQ});
 
-    try stdout_writer.flush(); // Don't forget to flush!
-}
+    // Reference jxrlib symbols via their address (no-op, but compiler
+    // verifies the symbol exists). Suppress unused warnings.
+    _ = jxrlib.PK_SDK_VERSION;
+    _ = jxl.JXL_ENC_FRAME_SETTING_EFFORT;
 
-test "simple test" {
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(i32) = .empty;
-    defer list.deinit(gpa); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(gpa, 42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
-
-test "fuzz example" {
-    try std.testing.fuzz({}, testOne, .{});
-}
-
-fn testOne(context: void, smith: *std.testing.Smith) !void {
-    _ = context;
-    // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(u8) = .empty;
-    defer list.deinit(gpa);
-    while (!smith.eos()) switch (smith.value(enum { add_data, dup_data })) {
-        .add_data => {
-            const slice = try list.addManyAsSlice(gpa, smith.value(u4));
-            smith.bytes(slice);
-        },
-        .dup_data => {
-            if (list.items.len == 0) continue;
-            if (list.items.len > std.math.maxInt(u32)) return error.SkipZigTest;
-            const len = smith.valueRangeAtMost(u32, 1, @min(32, list.items.len));
-            const off = smith.valueRangeAtMost(u32, 0, @intCast(list.items.len - len));
-            try list.appendSlice(gpa, list.items[off..][0..len]);
-            try std.testing.expectEqualSlices(
-                u8,
-                list.items[off..][0..len],
-                list.items[list.items.len - len ..],
-            );
-        },
-    };
+    try stdout_writer.flush();
 }
