@@ -36,7 +36,13 @@ Install per platform:
 
 - macOS — Homebrew: `brew install brotli lcms2 highway`
 - Linux — distro packages: `apt install libbrotli-dev liblcms2-dev libhwy-dev`
-- Windows — MSYS2: `pacman -S mingw-w64-x86_64-brotli mingw-w64-x86_64-lcms2 mingw-w64-x86_64-highway`
+- Windows — MSYS2: `pacman -S mingw-w64-x86_64-brotli mingw-w64-x86_64-lcms2 mingw-w64-x86_64-highway mingw-w64-x86_64-pkg-config`
+
+**Windows note:** `build.zig` passes `CMAKE_PREFIX_PATH=C:/msys64/mingw64`
+and explicit `HWY_LIBRARY` / `HWY_INCLUDE_DIR` to the libjxl cmake
+configure. Without these, libjxl's `FindHWY.cmake` cannot locate the
+MSYS2-installed highway even when `JPEGXL_FORCE_SYSTEM_HWY=ON`, because
+MinGW cmake's default search paths don't include the MSYS2 prefix.
 
 For a truly static distribution (zero runtime deps), re-vendor brotli,
 highway, and lcms2 into `vendor/libjxl/third_party/` and rebuild with the
@@ -75,6 +81,10 @@ patched locally for build compatibility:
 - **`jxrtestlib/JXRTestTif.c`** (lines 912, 913): same `T**`→`void**`
   cast pattern as the JXRTest.c fix above. `WMPFree(void**)` was
   receiving `&U32*` (i.e. `U32**`).
+- **`jxrencoderdecoder/JxrEncApp.c` line 618 / `JxrDecApp.c` line 430**:
+  same `T**`→`void**` pattern. `PKCodecFactory::CreateCodec` and
+  `PKTestFactory_CreateCodec` both take `void**`; the calls were
+  passing `PKImageEncode**` / `PKImageDecode**`.
 - **`jxrgluelib/JXRMeta.h` lines 30-54**: added empty-macro fallbacks for
   the 6 SAL tokens jxrlib uses (`__in`, `__out`, `__in_ecount`,
   `__out_ecount`, `__in_win`, `__out_win`) when compiling with non-MSVC
