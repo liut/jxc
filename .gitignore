@@ -27,3 +27,4 @@ Thumbs.db
 
 # Local env / logs
 *.log
+*.jx?
