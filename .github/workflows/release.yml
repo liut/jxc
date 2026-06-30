@@ -54,7 +54,7 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-brotli
             mingw-w64-x86_64-lcms2
-            mingw-w64-x86_64-hwy
+            mingw-w64-x86_64-highway
 
       - name: Add MinGW64 to PATH
         if: matrix.msys2
