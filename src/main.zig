@@ -1,7 +1,7 @@
 // jxc — HDR JXR (and WDP/HDP) to JPEG XL converter.
 //
 // Modes:
-//   jxc <input.jxr>           <output.jxl>               single file, HDR (default)
+//   jxc <input.jxr>           <output.jxl>               single file
 //   jxc <input.jxr>                                       single file, output = <input>.jxl
 //   jxc <input-dir/>          <output-dir/>              batch
 //   jxc <input-dir/>                                      batch, output = input-dir (in-place)
@@ -10,6 +10,11 @@
 //   - If output is omitted: single-file uses <input-stem>.jxl; batch uses
 //     input-dir as output-dir (so batch can convert in-place).
 //   - Existing output files are NOT overwritten. Skipped with a warning.
+//
+// Default is SDR (8-bit sRGB). Add --hdr to preserve Rec.2020 + linear HDR
+// values for HDR-capable displays/viewers. Without --hdr, HDR source pixels
+// are tone-mapped into the sRGB display range, which is what most monitors
+// and image viewers expect.
 
 const std = @import("std");
 const jxr = @import("jxr.zig");
@@ -20,8 +25,8 @@ const usage =
     \\jxc — HDR JXR (and WDP/HDP) to JPEG XL converter
     \\
     \\Usage:
-    \\  jxc [--sdr] [--distance <float>] <input.jxr>  [<output.jxl>]
-    \\  jxc [--sdr] [--distance <float>] <input-dir/> [<output-dir/>]
+    \\  jxc [--hdr] [--distance <float>] <input.jxr>  [<output.jxl>]
+    \\  jxc [--hdr] [--distance <float>] <input-dir/> [<output-dir/>]
     \\
     \\If output is omitted:
     \\  single file → <input>.jxl in same directory
@@ -29,11 +34,16 @@ const usage =
     \\
     \\Existing output files are skipped (not overwritten).
     \\
-    \\--sdr: 8-bit sRGB output (for sRGB displays, applies HDR→SDR tone mapping)
-    \\        default: 32-bit HDR Rec.2020 + linear (for HDR displays)
+    \\Default: 8-bit sRGB output. HDR source pixels are tone-mapped into the
+    \\sRGB display range, so the result opens correctly in every image viewer.
+    \\
+    \\--hdr: preserve full HDR (Rec.2020 primaries + linear transfer, 32-bit
+    \\       float). For HDR-capable displays/viewers only. Without color
+    \\       management, viewers on sRGB displays render this as
+    \\       over-saturated and slightly off in color.
     \\
     \\--distance controls quality (libjxl Butteraugli distance):
-    \\  1.0   visually lossless HDR (default for HDR mode)
+    \\  1.0   visually lossless (default)
     \\  0.0   lossless (pixel-byte-exact)
     \\  2.0+  lower quality, smaller files
     \\
@@ -53,7 +63,7 @@ pub fn main(init: std.process.Init) !void {
 
     // Parse optional flags before positional input/output.
     var distance: f32 = 1.0;
-    var target: jxl.Target = .hdr;
+    var target: jxl.Target = .sdr;
     var positional_start: usize = 1;
     while (positional_start < args.len) {
         if (std.mem.eql(u8, args[positional_start], "--distance")) {
@@ -69,8 +79,8 @@ pub fn main(init: std.process.Init) !void {
             };
             if (distance < 0.0) distance = 0.0;
             positional_start += 2;
-        } else if (std.mem.eql(u8, args[positional_start], "--sdr")) {
-            target = .sdr;
+        } else if (std.mem.eql(u8, args[positional_start], "--hdr")) {
+            target = .hdr;
             positional_start += 1;
         } else {
             break;

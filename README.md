@@ -10,17 +10,24 @@ Single binary, runs on Windows / macOS / Linux.
 HDR JXR (`.jxr`, `.wdp`, `.hdp`) is the format Windows uses for HDR
 desktop wallpapers. It is essentially unreadable on macOS or Linux, and
 existing escape hatches (ImageMagick + libjxr) silently downconvert HDR
-to SDR via the TIFF intermediate. jxc preserves HDR end-to-end by:
+to SDR via the TIFF intermediate. jxc reads HDR end-to-end and writes
+JXL, in either of two output modes:
 
-- Decoding the JXR via jxrlib with the source pixel format preserved
-  (16-bit fixed-point, 16-bit half-float, or 32-bit full-float per channel).
-- Embedding the source ICC profile in the JXL output when present.
-- Falling back to Rec.2020 + linear transfer when no ICC is present
-  (common for Windows HDR screenshots — viewers apply PQ at display time).
-- Detecting unused alpha channels in RGBA JXR files and encoding as RGB
-  to avoid transparent outputs.
-- Lossless JXL encoding by default, or lossy at a user-chosen
-  Butteraugli distance.
+- **SDR (default)** — tone-maps HDR to 8-bit sRGB. Output opens correctly
+  in every image viewer on every display.
+- **HDR (`--hdr`)** — preserves Rec.2020 + linear values, 32-bit float.
+  Pixel-byte-exact to the source. Needs an HDR-capable display or a
+  color-managing viewer to render correctly; on a vanilla sRGB display
+  it looks over-saturated because most viewers do no tone/color mapping
+  for this combination.
+
+Notes on the SDR pipeline:
+
+- Detects unused alpha channels in RGBA JXR files and encodes as RGB
+  (no transparent outputs).
+- Embeds the source ICC profile in the JXL output when present.
+- Falls back to Rec.2020 → sRGB matrix conversion when no ICC is
+  present (the standard case for Windows HDR screenshots).
 
 ## Build
 
@@ -47,27 +54,40 @@ zig build run             # build + run with arguments
 ## Usage
 
 ```sh
-# Single file, visually lossless HDR (default)
+# Single file, visually lossless SDR (default)
 jxc input.jxr output.jxl
 
-# Lossless HDR (pass --distance 0.0; preserves pixels byte-for-byte)
+# Single file, full HDR (Rec.2020 + linear, 32-bit float)
+jxc --hdr input.jxr output.jxl
+
+# Lossless (pass --distance 0.0; preserves pixels byte-for-byte)
 jxc --distance 0.0 input.jxr output.jxl
 
-# Aggressive lossy (very small file, some HDR quality loss)
+# Aggressive lossy (very small file, some quality loss)
 jxc --distance 4.0 input.jxr output.jxl
 
 # Batch (recursive directory walk)
 jxc /path/to/jxr/dir/ /path/to/jxl/out/
+
+# Batch with no output dir → in-place conversion (.jxl next to .jxr)
+jxc /path/to/jxr/dir/
+
+# Skip already-converted files (default in batch; safe to re-run)
+jxc /path/to/jxr/dir/   # 2nd run reports "skip (exists)" for each
 ```
 
-### File size guide (3840×2160 HDR RGBA float screenshot, ~28 MB source)
+### File size guide
 
-| `--distance` | Output size | Compression | Notes                                  |
-|--------------|-------------|-------------|----------------------------------------|
-| 1.0 (default)| 3.6 MB      | 15×         | visually lossless HDR                  |
-| 0.0          | 57 MB       | 1.7×        | lossless HDR (byte-exact)              |
-| 2.0          | 2.7 MB      | 19×         | lossy HDR                              |
-| 4.0+         | < 2 MB      | 25×+        | aggressive lossy HDR                   |
+3840×2160 HDR RGBA float screenshot, ~28 MB source. SDR (default) values
+are roughly 0.7-0.85× of the HDR size because HDR preserves wider pixel
+range.
+
+| `--distance` | SDR (8-bit) | HDR (32-bit float) |
+|--------------|-------------|---------------------|
+| 1.0 (default)| 3.0 MB      | 3.6 MB              |
+| 0.0          | ~6 MB       | 57 MB               |
+| 2.0          | ~2 MB       | 2.7 MB              |
+| 4.0+         | < 2 MB      | < 2 MB              |
 
 Per-file output:
 
@@ -105,18 +125,37 @@ step in a future version.
 
 ## Verified against
 
-```
-$ ./jxc /Users/liutao/Downloads/FINAL\ FANTASY\ VII\ REMAKE\ Screenshot\ *.jxr /tmp/ff7.jxl
-.../FINAL FANTASY VII REMAKE Screenshot 2026.06.28 - 22.28.49.83.jxr: 3840x2160 32bpc exp=8 ch=4 icc=0B
-/tmp/ff7.jxl: ok
+### Source
 
-$ file /tmp/ff7.jxl
-/tmp/ff7.jxl: JPEG XL container
-```
+3840×2160 HDR JXR screenshot from FINAL FANTASY VII REMAKE,
+`128bppRGBAFloat` (32-bit float per channel), no embedded ICC. Alpha
+uniformly zero (real RGB content in an RGBA container — detected and
+stripped).
 
-Source: 3840×2160 HDR JXR, 128bppRGBAFloat (32-bit float per channel),
-no embedded ICC, 28.8 MB. Output: 59.8 MB lossless HDR JXL (Rec.2020 +
-PQ color via fallback).
+### `--hdr` output (Rec.2020 + linear)
+
+28 MB source → 59.8 MB lossless HDR JXL (Rec.2020 + linear, decoded by
+lossless JPEG XL path). Spot pixel `[800, 1080]` matches source byte-
+for-byte: R=6.31 G=2.33 B=0.52 (HDR range, >1.0 means > 100 nits in
+the source's normalized scale).
+
+### `--hdr` on sRGB display
+
+Note: a vanilla image viewer on an sRGB monitor will *not* color-manage
+the file and renders it over-saturated with clipped highlights. This is
+a viewer limitation, not a tool bug. To view HDR on an sRGB display,
+convert with `--sdr` (which is the default in this build).
+
+### `--sdr` output (`XnConvert` reference)
+
+XnConvert's reference output for the same source is 6.3 MB (8-bit sRGB,
+RGBA, no container). `jxc --sdr --distance 1.0` produces 3.0 MB (8-bit
+sRGB, RGB, no container) and matches XnConvert pixel-wise to within
+~5/255 mean absolute difference in mid-tones. Larger differences appear
+in clipped highlight regions where the two tools take slightly
+different "white" cut-off choices. Visually the jxc output preserves
+more mid-tone detail at the same file size because it carries fewer
+channels.
 
 ## Requirements
 
