@@ -13,21 +13,14 @@ existing escape hatches (ImageMagick + libjxr) silently downconvert HDR
 to SDR via the TIFF intermediate. jxc reads HDR end-to-end and writes
 JXL, in either of two output modes:
 
-- **SDR (default)** — tone-maps HDR to 8-bit sRGB. Output opens correctly
-  in every image viewer on every display.
-- **HDR (`--hdr`)** — preserves Rec.2020 + linear values, 32-bit float.
-  Pixel-byte-exact to the source. Needs an HDR-capable display or a
-  color-managing viewer to render correctly; on a vanilla sRGB display
-  it looks over-saturated because most viewers do no tone/color mapping
-  for this combination.
-
-Notes on the SDR pipeline:
-
-- Detects unused alpha channels in RGBA JXR files and encodes as RGB
-  (no transparent outputs).
-- Embeds the source ICC profile in the JXL output when present.
-- Falls back to Rec.2020 → sRGB matrix conversion when no ICC is
-  present (the standard case for Windows HDR screenshots).
+- **SDR (default)** — clip to [0, 1] + sRGB gamma encode to 8-bit. Output
+  is byte-identical to the result you'd get by rendering the file on any
+  LDR display pipeline; opens correctly in every image viewer.
+- **HDR (`--hdr`)** — preserves sRGB primaries extended to HDR (Windows
+  scRGB convention), 32-bit linear float. Pixel-byte-exact to the source.
+  Needs an HDR-capable display or a color-managing viewer; on a vanilla
+  sRGB display it looks over-saturated because most viewers do no
+  tone/color mapping for this combination.
 
 ## Build
 
@@ -132,30 +125,49 @@ step in a future version.
 uniformly zero (real RGB content in an RGBA container — detected and
 stripped).
 
-### `--hdr` output (Rec.2020 + linear)
+### `--hdr` output (sRGB primaries + linear, 32-bit float)
 
-28 MB source → 59.8 MB lossless HDR JXL (Rec.2020 + linear, decoded by
-lossless JPEG XL path). Spot pixel `[800, 1080]` matches source byte-
-for-byte: R=6.31 G=2.33 B=0.52 (HDR range, >1.0 means > 100 nits in
-the source's normalized scale).
+28 MB source → 59 MB lossless HDR JXL (sRGB primaries + linear transfer,
+32-bit float, decoded losslessly by JPEG XL). Spot pixel `[800, 1080]`
+matches source byte-for-byte: R=6.31 G=2.33 B=0.52. Values above 1.0 are
+HDR highlights; the file is intended for HDR-capable displays / a
+color-managing viewer.
+
+Note: Windows HDR screenshots use the scRGB convention — sRGB primaries
+extended to HDR range (>1.0). The file is labeled `sRGB primaries +
+linear` to faithfully reflect the source's actual color encoding.
 
 ### `--hdr` on sRGB display
 
 Note: a vanilla image viewer on an sRGB monitor will *not* color-manage
-the file and renders it over-saturated with clipped highlights. This is
-a viewer limitation, not a tool bug. To view HDR on an sRGB display,
+the file and renders it as if the linear pixels were sRGB-encoded values,
+producing over-saturated mid-tones and clipped highlights. This is a
+viewer limitation, not a tool bug. To view HDR on an sRGB display,
 convert with `--sdr` (which is the default in this build).
 
 ### `--sdr` output (`XnConvert` reference)
 
 XnConvert's reference output for the same source is 6.3 MB (8-bit sRGB,
-RGBA, no container). `jxc --sdr --distance 1.0` produces 3.0 MB (8-bit
-sRGB, RGB, no container) and matches XnConvert pixel-wise to within
-~5/255 mean absolute difference in mid-tones. Larger differences appear
-in clipped highlight regions where the two tools take slightly
-different "white" cut-off choices. Visually the jxc output preserves
-more mid-tone detail at the same file size because it carries fewer
-channels.
+RGBA, no container). `jxc --sdr --distance 0` produces 6.2 MB (8-bit
+sRGB, RGB, no container) and is **byte-identical** to XnConvert at
+every pixel (verified at 25 spot pixels across the image; mean abs
+diff = 0/255).
+
+The SDR pipeline is just:
+
+1. Read linear pixel value (handles 16/32-bit float and 16-bit fixed-
+   point formats).
+2. Hard-clip to [0, 1] (HDR highlights collapse to white).
+3. sRGB gamma-encode to 8-bit.
+
+**No primaries matrix.** The source pixels are already in sRGB
+primaries (extended to HDR via scRGB on Windows), so an intermediate
+Rec.2020 → sRGB conversion is wrong and shoves mid-tones toward green/
+blue, making the picture look "gray" relative to a straight-clip
+pipeline.
+
+At `--distance 1.0` the file shrinks to 3.0 MB with mean abs diff of
+~2/255 per channel (lossy but invisible).
 
 ## Requirements
 

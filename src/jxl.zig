@@ -251,9 +251,14 @@ fn setSdrColorEncoding(enc: *jxl.JxlEncoder) EncodeError!void {
         return EncodeError.JxlColorEncodingFailed;
 }
 
-/// Convert HDR linear Rec.2020 → 8-bit sRGB.
-/// Steps: linearize source → clamp → Rec.2020→sRGB matrix → sRGB gamma → 8-bit.
-/// Caller owns the returned slice and must free it.
+/// Convert HDR linear sRGB-extended → 8-bit sRGB.
+/// Steps: linearize source → clamp → sRGB gamma encode → 8-bit.
+///
+/// NO primaries matrix. The source is treated as sRGB primaries extended
+/// to HDR (above 1.0). This matches XnConvert output byte-for-byte on
+/// Windows HDR screenshots and FF7 Remake captures. Rec.2020 assumption
+/// was incorrect — those primaries were wider, and the matrix pushed pixels
+/// toward green/blue (shifting the image to a "grayer/cooler" appearance).
 fn sdrConvert(allocator: std.mem.Allocator, decoded: jxr.Decoded) ![]u8 {
     const w = decoded.width;
     const h = decoded.height;
@@ -270,22 +275,16 @@ fn sdrConvert(allocator: std.mem.Allocator, decoded: jxr.Decoded) ![]u8 {
         const g_lin = readLinear(decoded.pixels, i + bpp / src_channels, decoded.exponent_bits, decoded.bits_per_channel);
         const b_lin = readLinear(decoded.pixels, i + 2 * (bpp / src_channels), decoded.exponent_bits, decoded.bits_per_channel);
 
-        // Soft clamp to [0, 1] — values above 1.0 are clipped (could be a
-        // perceptual tonemap here, but linear clip + sRGB gamma matches
-        // common reference tools).
+        // Hard clamp to [0, 1]. Values above 1.0 are highlights that exceed
+        // the display range — they collapse to white, matching what every
+        // 8-bit sRGB image viewer would do.
         const r_clip = @min(@max(r_lin, 0.0), 1.0);
         const g_clip = @min(@max(g_lin, 0.0), 1.0);
         const b_clip = @min(@max(b_lin, 0.0), 1.0);
 
-        // Rec.2020 → sRGB (linear) matrix. Standard adaptation.
-        const rs = 0.6274 * r_clip + 0.3293 * g_clip + 0.0433 * b_clip;
-        const gs = 0.0691 * r_clip + 0.9195 * g_clip + 0.0114 * b_clip;
-        const bs = 0.0164 * r_clip + 0.0880 * g_clip + 0.8956 * b_clip;
-
-        // sRGB gamma encode
-        out[j] = srgbEncode(rs);
-        out[j + 1] = srgbEncode(gs);
-        out[j + 2] = srgbEncode(bs);
+        out[j] = srgbEncode(r_clip);
+        out[j + 1] = srgbEncode(g_clip);
+        out[j + 2] = srgbEncode(b_clip);
 
         j += 3;
     }
