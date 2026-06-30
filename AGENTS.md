@@ -65,6 +65,16 @@ patched locally for build compatibility:
   by default there, suppressed on macOS/Linux by the `-w` in the
   Makefile). The casts are correct per the function declarations in
   `JXRTest.h:46,57` and `JXRGlue.h:287-288,634-635`.
+- **`image/sys/ansi.h` line 47**: added `|| defined(_WIN64)` to the
+  LP64 check that gates `UINTPTR_T` / `INTPTR_T` width. Windows uses
+  LLP64, so `__LP64__` is 0 there even on x64 — without this fix,
+  `UINTPTR_T` resolves to `unsigned int` (4 bytes) while `void*` is 8
+  bytes, tripping the `CT_ASSERT(sizeof(UINTPTR_T) == sizeof(void*), …)`
+  in `strcodec.h:92-93`. macOS/Linux are unaffected (`__LP64__` is
+  correctly 1 on those platforms).
+- **`jxrtestlib/JXRTestTif.c`** (lines 912, 913): same `T**`→`void**`
+  cast pattern as the JXRTest.c fix above. `WMPFree(void**)` was
+  receiving `&U32*` (i.e. `U32**`).
 - **`jxrgluelib/JXRMeta.h` lines 30-54**: added empty-macro fallbacks for
   the 6 SAL tokens jxrlib uses (`__in`, `__out`, `__in_ecount`,
   `__out_ecount`, `__in_win`, `__out_win`) when compiling with non-MSVC
