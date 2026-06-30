@@ -32,10 +32,6 @@ zig build -Doptimize=ReleaseFast
 ./zig-out/bin/jxc --help
 ```
 
-The build orchestrates jxrlib (`make`) and libjxl (CMake) as build
-steps, then statically links the resulting `.a` archives into a single
-executable via `addTranslateC` + `addObjectFile`.
-
 Convenience steps:
 
 ```sh
@@ -169,93 +165,11 @@ pipeline.
 At `--distance 1.0` the file shrinks to 3.0 MB with mean abs diff of
 ~2/255 per channel (lossy but invisible).
 
-## Requirements
+## For contributors
 
-The binary links the vendored C libraries statically, but transitively
-depends on these **system** shared libraries on the dev build:
-
-- `libbrotlienc`, `libbrotlidec`, `libbrotlicommon` (brotli)
-- `liblcms2` (lcms2)
-- `libhwy` (highway)
-- `libSystem` / glibc (OS-provided, always present)
-
-On macOS these are installed by Homebrew (`brew install brotli lcms2 highway`).
-On Linux they're in standard distro packages (e.g. `apt install libbrotli-dev
-liblcms2-dev libhwy-dev`). On Windows via MSYS2: `pacman -S mingw-w64-x86_64-brotli
-mingw-w64-x86_64-lcms2 mingw-w64-x86_64-hwy`.
-
-For a truly static distribution (zero runtime deps), re-vendor brotli,
-highway, and lcms2 into `vendor/libjxl/third_party/` and rebuild with the
-default flags (drop `JPEGXL_FORCE_SYSTEM_*=ON`). Not implemented yet —
-documented as Phase 5 of the plan.
-
-## Vendored source modifications
-
-The 4creators/jxrlib HEAD (commit `f752187`) and libjxl v0.11.2 are
-patched locally for build compatibility:
-
-### jxrlib
-
-- **`Makefile` line 68**: added `-fPIC` unconditionally and
-  `-Wno-error=implicit-function-declaration -Wno-implicit-function-declaration`.
-  Modern macOS Clang treats K&R-style implicit declarations as errors.
-- **`jxrgluelib/JXRGlueJxr.c` `FreeDescMetadata`**: removed `assert(FALSE)`
-  on unhandled DPKVT types. Real Windows HDR JXR files commonly use
-  DPKVT_UI1/BOOL/etc. for descriptive metadata; the original assert
-  crashed the decoder on Release.
-
-### libjxl
-
-- **`deps.sh`**: removed `set -e` so the testdata download failure
-  doesn't abort (testdata is unused since we disable `BUILD_TESTING`).
-
-These patches are minimal and document the upstream bugs we're working
-around. They could be submitted upstream or replaced with fork tracking.
-
-## HDR verification (v0 step)
-
-Before the main project was built, a small C program verified that
-jxrlib could decode HDR JXR files end-to-end. See `tools/v0_README.md`
-and `tools/v0_output.txt` for the verification artifacts.
-
-```sh
-make -C vendor/jxrlib clean all
-cc -D__ANSI__ -DDISABLE_PERF_MEASUREMENT \
-   -Ivendor/jxrlib/common/include -Ivendor/jxrlib/image/sys -Ivendor/jxrlib/jxrgluelib \
-   -Wno-error=implicit-function-declaration -Wno-implicit-function-declaration \
-   -o tools/v0_decode_test tools/v0_decode_test.c \
-   vendor/jxrlib/build/libjxrglue.a vendor/jxrlib/build/libjpegxr.a -lm
-
-./tools/v0_decode_test /path/to/test.jxr
-```
-
-## Project layout
-
-```
-jxc/
-├── README.md                            ← you are here
-├── LICENSE                              ← MIT
-├── build.zig                            ← build orchestration
-├── build.zig.zon                        ← Zig package metadata
-├── src/
-│   ├── main.zig                         ← CLI entry, mode dispatch
-│   ├── jxr.zig                          ← JXR decode via jxrlib
-│   ├── jxl.zig                          ← JXL encode via libjxl
-│   ├── batch.zig                        ← directory walk + per-file handling
-│   └── c/
-│       ├── jxrlib_umbrella.h            ← for addTranslateC
-│       └── libjxl_umbrella.h            ← for addTranslateC
-├── tools/
-│   ├── v0_decode_test.c                 ← R10 verification program
-│   ├── v0_output.txt                    ← captured output
-│   └── v0_README.md                     ← v0 docs
-├── vendor/
-│   ├── jxrlib/                          ← 4creators fork @ f752187 (patched)
-│   └── libjxl/                          ← libjxl v0.11.2 (patched)
-└── docs/
-    ├── brainstorms/                     ← brainstorm docs
-    └── plans/                           ← implementation plan
-```
+Build orchestration, system build dependencies, vendored library
+patches, project layout, and v0 verification artifacts live in
+[AGENTS.md](./AGENTS.md).
 
 ## License
 
