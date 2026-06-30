@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  security-events: write
+  pull-requests: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: jxc-darwin-arm64
+            deps: |
+              brew install brotli lcms2 highway
+          - os: ubuntu-latest
+            artifact: jxc-linux-amd64
+            deps: |
+              sudo apt-get update
+              sudo apt-get install -y libbrotli-dev liblcms2-dev libhwy-dev
+          - os: windows-latest
+            artifact: jxc-windows-amd64
+            msys2: true
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux deps
+        if: runner.os == 'Linux'
+        run: ${{ matrix.deps }}
+
+      - name: Install macOS deps
+        if: runner.os == 'macOS'
+        run: ${{ matrix.deps }}
+
+      - name: Set up MSYS2 (Windows)
+        if: matrix.msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            base-devel
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-brotli
+            mingw-w64-x86_64-lcms2
+            mingw-w64-x86_64-hwy
+
+      - name: Add MinGW64 to PATH
+        if: matrix.msys2
+        shell: bash
+        run: echo "C:/msys64/mingw64/bin" >> "$GITHUB_PATH"
+
+      - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: "0.16.0"
+
+      - name: Build
+        run: zig build -Doptimize=ReleaseSafe
+
+      - name: Ad-hoc codesign (macOS)
+        if: runner.os == 'macOS'
+        run: codesign --force --deep -s - zig-out/bin/jxc
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: tar czf ${{ matrix.artifact }}.tar.gz -C zig-out/bin jxc
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path zig-out/bin/jxc.exe -DestinationPath ${{ matrix.artifact }}.zip
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact }}.*
+          generate_release_notes: true
