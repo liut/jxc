@@ -36,7 +36,7 @@ Install per platform:
 
 - macOS — Homebrew: `brew install brotli lcms2 highway`
 - Linux — distro packages: `apt install libbrotli-dev liblcms2-dev libhwy-dev`
-- Windows — MSYS2: `pacman -S mingw-w64-x86_64-brotli mingw-w64-x86_64-lcms2 mingw-w64-x86_64-hwy`
+- Windows — MSYS2: `pacman -S mingw-w64-x86_64-brotli mingw-w64-x86_64-lcms2 mingw-w64-x86_64-highway`
 
 For a truly static distribution (zero runtime deps), re-vendor brotli,
 highway, and lcms2 into `vendor/libjxl/third_party/` and rebuild with the
@@ -57,6 +57,15 @@ patched locally for build compatibility:
   on unhandled DPKVT types. Real Windows HDR JXR files commonly use
   DPKVT_UI1/BOOL/etc. for descriptive metadata; the original assert
   crashed the decoder on Release.
+- **`jxrgluelib/JXRMeta.h` lines 30-54**: added empty-macro fallbacks for
+  the 6 SAL tokens jxrlib uses (`__in`, `__out`, `__in_ecount`,
+  `__out_ecount`, `__in_win`, `__out_win`) when compiling with non-MSVC
+  (GCC, Clang, MinGW). The 4creators fork removed the bundled
+  `<windowsmediaphoto.h>` that originally pulled in MSVC's `<sal.h>`, and
+  `JXRMeta.h:31`'s `#ifndef WIN32` guard means `wmspecstring.h` is also
+  skipped on Windows — so on MinGW, no SAL definitions are in scope at
+  all. The fallback block is placed at the top of the header so it
+  covers every translation unit that includes `JXRGlue.h`.
 
 ### libjxl
 

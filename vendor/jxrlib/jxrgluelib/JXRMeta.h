@@ -1,14 +1,14 @@
 //*@@@+++@@@@******************************************************************
 //
-// Copyright © Microsoft Corp.
+// Copyright ï¿½ Microsoft Corp.
 // All rights reserved.
 // 
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
 // 
-// • Redistributions of source code must retain the above copyright notice,
+// ï¿½ Redistributions of source code must retain the above copyright notice,
 //   this list of conditions and the following disclaimer.
-// • Redistributions in binary form must reproduce the above copyright notice,
+// ï¿½ Redistributions in binary form must reproduce the above copyright notice,
 //   this list of conditions and the following disclaimer in the documentation
 //   and/or other materials provided with the distribution.
 // 
@@ -26,6 +26,32 @@
 //
 //*@@@---@@@@******************************************************************
 #pragma once
+
+/* GCC/Clang/MinGW don't expose MSVC's <sal.h>. jxrlib 4creators fork removed
+ * the bundled <windowsmediaphoto.h> that used to pull it in, so on non-MSVC
+ * compilers the SAL annotations are never defined. Provide empty fallbacks
+ * for the 6 tokens jxrlib actually uses (verified by grep over jxrgluelib/).
+ * See AGENTS.md "Vendored source modifications" for the upstream status. */
+#ifndef _MSC_VER
+    #ifndef __in
+    #define __in
+    #endif
+    #ifndef __out
+    #define __out
+    #endif
+    #ifndef __in_ecount
+    #define __in_ecount(n)
+    #endif
+    #ifndef __out_ecount
+    #define __out_ecount(n)
+    #endif
+    #ifndef __in_win
+    #define __in_win
+    #endif
+    #ifndef __out_win
+    #define __out_win
+    #endif
+#endif
 
 #include <windowsmediaphoto.h>
 #ifndef WIN32
