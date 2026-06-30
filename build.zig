@@ -32,7 +32,6 @@ pub fn build(b: *std.Build) void {
     const jxrlib_make = b.addSystemCommand(&.{
         "make", "-j4", "-C", "vendor/jxrlib",
     });
-    jxrlib_make.addFileArg(b.path("vendor/jxrlib/Makefile"));
     jxrlib_make.setEnvironmentVariable("CC", "cc");
 
     const jxrlib_include_paths = &[_]std.Build.LazyPath{
@@ -81,7 +80,6 @@ pub fn build(b: *std.Build) void {
         "-DJPEGXL_FORCE_SYSTEM_LCMS2=ON",
         "-DJPEGXL_BUNDLE_LIBPNG=OFF",
     });
-    libjxl_configure.addFileArg(b.path("vendor/libjxl/CMakeLists.txt"));
 
     const libjxl_build = b.addSystemCommand(&.{
         "cmake", "--build", "vendor/libjxl/build", "-j4",
