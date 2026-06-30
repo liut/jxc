@@ -30,9 +30,15 @@ pub fn build(b: *std.Build) void {
     // The Makefile target that produces both archives is the default `all`.
     // ─────────────────────────────────────────────────────────────────────
     const jxrlib_make = b.addSystemCommand(&.{
-        "make", "-j4", "-C", "vendor/jxrlib",
+        if (target.result.os.tag == .windows) "mingw32-make" else "make",
+        "-j4",
+        "-C",
+        "vendor/jxrlib",
     });
-    jxrlib_make.setEnvironmentVariable("CC", "cc");
+    jxrlib_make.setEnvironmentVariable(
+        "CC",
+        if (target.result.os.tag == .windows) "gcc" else "cc",
+    );
 
     const jxrlib_include_paths = &[_]std.Build.LazyPath{
         b.path("vendor/jxrlib/common/include"),
@@ -57,29 +63,57 @@ pub fn build(b: *std.Build) void {
     //   - JPEGXL_FORCE_SYSTEM_BROTLI/HWY/LCMS2 = ON (use MacPorts libs)
     //   - JPEGXL_BUNDLE_LIBPNG = OFF
     // ─────────────────────────────────────────────────────────────────────
-    const libjxl_configure = b.addSystemCommand(&.{
-        "cmake",
-        "-S", "vendor/libjxl",
-        "-B", "vendor/libjxl/build",
-        "-DCMAKE_BUILD_TYPE=Release",
-        "-DBUILD_SHARED_LIBS=OFF",
-        "-DBUILD_TESTING=OFF",
-        "-DJPEGXL_ENABLE_FUZZERS=OFF",
-        "-DJPEGXL_ENABLE_TOOLS=OFF",
-        "-DJPEGXL_ENABLE_BENCHMARK=OFF",
-        "-DJPEGXL_ENABLE_EXAMPLES=OFF",
-        "-DJPEGXL_ENABLE_VIEWERS=OFF",
-        "-DJPEGXL_ENABLE_PLUGINS=OFF",
-        "-DJPEGXL_ENABLE_DOXYGEN=OFF",
-        "-DJPEGXL_ENABLE_MANPAGES=OFF",
-        "-DJPEGXL_ENABLE_JNI=OFF",
-        "-DJPEGXL_ENABLE_SKCMS=OFF",
-        "-DJPEGXL_ENABLE_SJPEG=OFF",
-        "-DJPEGXL_FORCE_SYSTEM_BROTLI=ON",
-        "-DJPEGXL_FORCE_SYSTEM_HWY=ON",
-        "-DJPEGXL_FORCE_SYSTEM_LCMS2=ON",
-        "-DJPEGXL_BUNDLE_LIBPNG=OFF",
-    });
+    const libjxl_configure = if (target.result.os.tag == .windows)
+        b.addSystemCommand(&.{
+            "cmake",
+            "-G", "MinGW Makefiles",
+            "-DCMAKE_C_COMPILER=gcc",
+            "-DCMAKE_CXX_COMPILER=g++",
+            "-S", "vendor/libjxl",
+            "-B", "vendor/libjxl/build",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DBUILD_SHARED_LIBS=OFF",
+            "-DBUILD_TESTING=OFF",
+            "-DJPEGXL_ENABLE_FUZZERS=OFF",
+            "-DJPEGXL_ENABLE_TOOLS=OFF",
+            "-DJPEGXL_ENABLE_BENCHMARK=OFF",
+            "-DJPEGXL_ENABLE_EXAMPLES=OFF",
+            "-DJPEGXL_ENABLE_VIEWERS=OFF",
+            "-DJPEGXL_ENABLE_PLUGINS=OFF",
+            "-DJPEGXL_ENABLE_DOXYGEN=OFF",
+            "-DJPEGXL_ENABLE_MANPAGES=OFF",
+            "-DJPEGXL_ENABLE_JNI=OFF",
+            "-DJPEGXL_ENABLE_SKCMS=OFF",
+            "-DJPEGXL_ENABLE_SJPEG=OFF",
+            "-DJPEGXL_FORCE_SYSTEM_BROTLI=ON",
+            "-DJPEGXL_FORCE_SYSTEM_HWY=ON",
+            "-DJPEGXL_FORCE_SYSTEM_LCMS2=ON",
+            "-DJPEGXL_BUNDLE_LIBPNG=OFF",
+        })
+    else
+        b.addSystemCommand(&.{
+            "cmake",
+            "-S", "vendor/libjxl",
+            "-B", "vendor/libjxl/build",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DBUILD_SHARED_LIBS=OFF",
+            "-DBUILD_TESTING=OFF",
+            "-DJPEGXL_ENABLE_FUZZERS=OFF",
+            "-DJPEGXL_ENABLE_TOOLS=OFF",
+            "-DJPEGXL_ENABLE_BENCHMARK=OFF",
+            "-DJPEGXL_ENABLE_EXAMPLES=OFF",
+            "-DJPEGXL_ENABLE_VIEWERS=OFF",
+            "-DJPEGXL_ENABLE_PLUGINS=OFF",
+            "-DJPEGXL_ENABLE_DOXYGEN=OFF",
+            "-DJPEGXL_ENABLE_MANPAGES=OFF",
+            "-DJPEGXL_ENABLE_JNI=OFF",
+            "-DJPEGXL_ENABLE_SKCMS=OFF",
+            "-DJPEGXL_ENABLE_SJPEG=OFF",
+            "-DJPEGXL_FORCE_SYSTEM_BROTLI=ON",
+            "-DJPEGXL_FORCE_SYSTEM_HWY=ON",
+            "-DJPEGXL_FORCE_SYSTEM_LCMS2=ON",
+            "-DJPEGXL_BUNDLE_LIBPNG=OFF",
+        });
 
     const libjxl_build = b.addSystemCommand(&.{
         "cmake", "--build", "vendor/libjxl/build", "-j4",
