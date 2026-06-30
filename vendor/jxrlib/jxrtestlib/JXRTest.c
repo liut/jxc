@@ -1,14 +1,14 @@
 //*@@@+++@@@@******************************************************************
 //
-// Copyright © Microsoft Corp.
+// Copyright ï¿½ Microsoft Corp.
 // All rights reserved.
 // 
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
 // 
-// • Redistributions of source code must retain the above copyright notice,
+// ï¿½ Redistributions of source code must retain the above copyright notice,
 //   this list of conditions and the following disclaimer.
-// • Redistributions in binary form must reproduce the above copyright notice,
+// ï¿½ Redistributions in binary form must reproduce the above copyright notice,
 //   this list of conditions and the following disclaimer in the documentation
 //   and/or other materials provided with the distribution.
 // 
@@ -208,13 +208,13 @@ ERR PKTestFactory_CreateDecoderFromFile(const char* szFilename, PKImageDecode** 
     FailIf(NULL == pExt, WMP_errUnsupportedFormat);
 
     // get decode PKIID
-    Call(GetTestDecodeIID(pExt, &pIID));
+    Call(GetTestDecodeIID(pExt, (const PKIID**)&pIID));
 
     // create stream
     Call(CreateWS_File(&pStream, szFilename, "rb"));
 
     // Create decoder
-    Call(PKTestFactory_CreateCodec(pIID, ppDecoder));
+    Call(PKTestFactory_CreateCodec(pIID, (void**)ppDecoder));
     pDecoder = *ppDecoder;
 
     // attach stream to decoder
@@ -232,7 +232,7 @@ ERR PKCreateTestFactory(PKCodecFactory** ppCFactory, U32 uVersion)
 
     UNREFERENCED_PARAMETER( uVersion );
 
-    Call(PKAlloc(ppCFactory, sizeof(**ppCFactory)));
+    Call(PKAlloc((void**)ppCFactory, sizeof(**ppCFactory)));
     pCFactory = *ppCFactory;
 
     pCFactory->CreateCodec = PKTestFactory_CreateCodec;
@@ -287,7 +287,7 @@ ERR PKTestDecode_Release(
 
     pID->fStreamOwner && pID->pStream->Close(&pID->pStream);
 
-    return PKFree(ppID);
+    return PKFree((void**)ppID);
 }
 
 ERR PKTestDecode_Create(
@@ -296,7 +296,7 @@ ERR PKTestDecode_Create(
     ERR err = WMP_errSuccess;
     PKTestDecode* pID = NULL;
 
-    Call(PKAlloc(ppID, sizeof(**ppID)));
+    Call(PKAlloc((void**)ppID, sizeof(**ppID)));
 
     pID = *ppID;
     pID->Initialize = PKTestDecode_Initialize;

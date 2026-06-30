@@ -57,6 +57,14 @@ patched locally for build compatibility:
   on unhandled DPKVT types. Real Windows HDR JXR files commonly use
   DPKVT_UI1/BOOL/etc. for descriptive metadata; the original assert
   crashed the decoder on Release.
+- **`jxrtestlib/JXRTest.c`** (lines 211, 217, 235, 290, 299): added
+  explicit casts `(const PKIID**)&pIID`, `(void**)ppDecoder`,
+  `(void**)ppCFactory`, `(void**)ppID` at 5 call sites. The original
+  code passed `T**` to functions taking `void**` / `const T**`, which
+  MinGW gcc reports as `-Wincompatible-pointer-types` (treated as error
+  by default there, suppressed on macOS/Linux by the `-w` in the
+  Makefile). The casts are correct per the function declarations in
+  `JXRTest.h:46,57` and `JXRGlue.h:287-288,634-635`.
 - **`jxrgluelib/JXRMeta.h` lines 30-54**: added empty-macro fallbacks for
   the 6 SAL tokens jxrlib uses (`__in`, `__out`, `__in_ecount`,
   `__out_ecount`, `__in_win`, `__out_win`) when compiling with non-MSVC
