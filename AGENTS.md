@@ -24,35 +24,22 @@ zig build run             # build + run with arguments
 
 ## System build dependencies
 
-The binary links the vendored C libraries statically, but transitively
-depends on these **system** shared libraries on the dev build:
+The binary has **zero non-OS runtime dependencies** — all third-party
+C/C++ libs (jxrlib, libjxl, brotli, highway, lcms2) are statically
+linked from sources vendored under `vendor/`. The only OS-provided
+symbol the final binary links against is `libSystem.B.dylib` /
+glibc (C runtime, always present).
 
-- `libbrotlienc`, `libbrotlidec`, `libbrotlicommon` (brotli)
-- `liblcms2` (lcms2)
-- `libhwy` (highway)
-- `libSystem` / glibc (OS-provided, always present)
+Per-platform host packages needed only for the **build**:
 
-Install per platform:
+- macOS — Homebrew: `cmake`, `make` (Xcode Command Line Tools has them)
+- Linux — distro packages: `cmake`, `make`, `gcc`, `g++`
+- Windows — MSYS2: `mingw-w64-x86_64-toolchain`, `mingw-w64-x86_64-cmake`
 
-- macOS — Homebrew: `brew install brotli lcms2 highway`
-- Linux — distro packages: `apt install libbrotli-dev liblcms2-dev libhwy-dev`
-- Windows — MSYS2: `pacman -S mingw-w64-x86_64-brotli mingw-w64-x86_64-lcms2 mingw-w64-x86_64-pkg-config`
-
-**Windows note:** the workflow does **not** install `mingw-w64-x86_64-highway`;
-instead it builds Highway 1.2.0 from source into `/mingw64` before
-`zig build` runs. The MSYS2 package's `libhwy.pc` exposes a version that
-libjxl's `find_package(HWY 1.0.7)` rejects for unclear reasons; building
-from a pinned tag produces a `.pc` that satisfies the version check.
-
-`build.zig` also passes `CMAKE_PREFIX_PATH=C:/msys64/mingw64` and
-explicit `HWY_LIBRARY` / `HWY_INCLUDE_DIR` to the libjxl cmake configure
-as a belt-and-suspenders fallback so `FindHWY.cmake` definitely locates
-the freshly-installed highway.
-
-For a truly static distribution (zero runtime deps), re-vendor brotli,
-highway, and lcms2 into `vendor/libjxl/third_party/` and rebuild with the
-default flags (drop `JPEGXL_FORCE_SYSTEM_*=ON`). Not implemented yet —
-documented as Phase 5 of the plan.
+That's it. `brotli`, `highway`, `lcms2` are vendored under
+`vendor/libjxl/third_party/` and built by libjxl's CMake as part of
+`zig build build-libjxl` (see "Vendored source modifications" for the
+pinned versions).
 
 ## Vendored source modifications
 
@@ -105,8 +92,19 @@ patched locally for build compatibility:
 - **`deps.sh`**: removed `set -e` so the testdata download failure
   doesn't abort (testdata is unused since we disable `BUILD_TESTING`).
 
-These patches are minimal and document the upstream bugs we're working
-around. They could be submitted upstream or replaced with fork tracking.
+### Vendored third-party (under `vendor/libjxl/third_party/`)
+
+- **`highway/`** — `google/highway` at tag **1.2.0**. Pinned (not
+  `HEAD`) for reproducible builds. Drives libjxl's SIMD dispatch.
+- **`brotli/`** — `google/brotli` at tag **v1.1.0**. Pinned for the same
+  reason.
+- **`lcms/`** — `mm2/Little-CMS` at tag **lcms2.16**. libjxl's
+  `third_party/CMakeLists.txt:108` checks for `.git` inside this dir, so
+  it must be a git checkout (cloned, not just copied).
+
+These were added to drop the `JPEGXL_FORCE_SYSTEM_*=ON` chain and make
+the build self-contained across platforms — the only OS-provided symbol
+the final binary links is `libSystem.B.dylib` / glibc.
 
 ## v0 verification (HDR decode)
 

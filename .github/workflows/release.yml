@@ -17,13 +17,8 @@ jobs:
         include:
           - os: macos-latest
             artifact: jxc-darwin-arm64
-            deps: |
-              brew install brotli lcms2 highway
           - os: ubuntu-latest
             artifact: jxc-linux-amd64
-            deps: |
-              sudo apt-get update
-              sudo apt-get install -y libbrotli-dev liblcms2-dev libhwy-dev
           - os: windows-latest
             artifact: jxc-windows-amd64
             msys2: true
@@ -32,14 +27,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Linux deps
-        if: runner.os == 'Linux'
-        run: ${{ matrix.deps }}
-
-      - name: Install macOS deps
-        if: runner.os == 'macOS'
-        run: ${{ matrix.deps }}
 
       - name: Set up MSYS2 (Windows)
         if: matrix.msys2
@@ -52,29 +39,6 @@ jobs:
             base-devel
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-brotli
-            mingw-w64-x86_64-lcms2
-            mingw-w64-x86_64-pkg-config
-
-      - name: Build Highway from source (Windows)
-        if: matrix.msys2
-        shell: msys2 {0}
-        run: |
-          set -euxo pipefail
-          cd "$RUNNER_TEMP"
-          git clone --depth 1 --branch 1.2.0 https://github.com/google/highway.git
-          cd highway
-          cmake -G "MinGW Makefiles" \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/mingw64 \
-            -DBUILD_SHARED_LIBS=OFF \
-            -DHWY_ENABLE_CONTRIB=OFF \
-            -DHWY_ENABLE_TESTS=OFF \
-            -DHWY_ENABLE_EXAMPLES=OFF \
-            -DHWY_FORCE_STATIC_LIBS=ON \
-            -S . -B build
-          cmake --build build -j4
-          cmake --install build
 
       - name: Add MinGW64 to PATH
         if: matrix.msys2

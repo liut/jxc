@@ -69,9 +69,6 @@ pub fn build(b: *std.Build) void {
             "-G", "MinGW Makefiles",
             "-DCMAKE_C_COMPILER=gcc",
             "-DCMAKE_CXX_COMPILER=g++",
-            "-DCMAKE_PREFIX_PATH=C:/msys64/mingw64",
-            "-DHWY_LIBRARY=C:/msys64/mingw64/lib/libhwy.a",
-            "-DHWY_INCLUDE_DIR=C:/msys64/mingw64/include",
             "-S", "vendor/libjxl",
             "-B", "vendor/libjxl/build",
             "-DCMAKE_BUILD_TYPE=Release",
@@ -88,9 +85,6 @@ pub fn build(b: *std.Build) void {
             "-DJPEGXL_ENABLE_JNI=OFF",
             "-DJPEGXL_ENABLE_SKCMS=OFF",
             "-DJPEGXL_ENABLE_SJPEG=OFF",
-            "-DJPEGXL_FORCE_SYSTEM_BROTLI=ON",
-            "-DJPEGXL_FORCE_SYSTEM_HWY=ON",
-            "-DJPEGXL_FORCE_SYSTEM_LCMS2=ON",
             "-DJPEGXL_BUNDLE_LIBPNG=OFF",
         })
     else
@@ -112,9 +106,6 @@ pub fn build(b: *std.Build) void {
             "-DJPEGXL_ENABLE_JNI=OFF",
             "-DJPEGXL_ENABLE_SKCMS=OFF",
             "-DJPEGXL_ENABLE_SJPEG=OFF",
-            "-DJPEGXL_FORCE_SYSTEM_BROTLI=ON",
-            "-DJPEGXL_FORCE_SYSTEM_HWY=ON",
-            "-DJPEGXL_FORCE_SYSTEM_LCMS2=ON",
             "-DJPEGXL_BUNDLE_LIBPNG=OFF",
         });
 
@@ -131,6 +122,14 @@ pub fn build(b: *std.Build) void {
         b.path("vendor/libjxl/build/lib/libjxl.a"),
         b.path("vendor/libjxl/build/lib/libjxl_cms.a"),
         b.path("vendor/libjxl/build/lib/libjxl_threads.a"),
+        // brotli, hwy, lcms are vendored under vendor/libjxl/third_party/
+        // and libjxl's CMake configures them as separate static targets; their
+        // .a files live under build/third_party/.
+        b.path("vendor/libjxl/build/third_party/brotli/libbrotlienc.a"),
+        b.path("vendor/libjxl/build/third_party/brotli/libbrotlidec.a"),
+        b.path("vendor/libjxl/build/third_party/brotli/libbrotlicommon.a"),
+        b.path("vendor/libjxl/build/third_party/highway/libhwy.a"),
+        b.path("vendor/libjxl/build/third_party/liblcms2.a"),
     };
 
     // ─────────────────────────────────────────────────────────────────────
@@ -188,14 +187,9 @@ pub fn build(b: *std.Build) void {
     inline for (jxrlib_archive_paths) |p| root_mod.addObjectFile(p);
     inline for (libjxl_archive_paths) |p| root_mod.addObjectFile(p);
 
-    // libjxl has transitive dependencies on brotli + lcms2 + hwy (system libs
-    // in this dev build; Phase 5 will switch to vendored copies for true
-    // static distribution).
-    root_mod.linkSystemLibrary("brotlienc", .{});
-    root_mod.linkSystemLibrary("brotlidec", .{});
-    root_mod.linkSystemLibrary("brotlicommon", .{});
-    root_mod.linkSystemLibrary("lcms2", .{});
-    root_mod.linkSystemLibrary("hwy", .{});
+    // brotli, hwy, and lcms2 are vendored under vendor/libjxl/third_party/
+    // and built as part of libjxl's CMake subdirectories, so their symbols
+    // are already in libjxl.a / libjxl_cms.a — no separate link needed.
 
     // Link the C++ runtime that matches what libjxl was actually built
     // against. `.link_libcpp = true` links Zig's bundled libcxx, which is
