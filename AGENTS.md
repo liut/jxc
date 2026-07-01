@@ -36,13 +36,18 @@ Install per platform:
 
 - macOS — Homebrew: `brew install brotli lcms2 highway`
 - Linux — distro packages: `apt install libbrotli-dev liblcms2-dev libhwy-dev`
-- Windows — MSYS2: `pacman -S mingw-w64-x86_64-brotli mingw-w64-x86_64-lcms2 mingw-w64-x86_64-highway mingw-w64-x86_64-pkg-config`
+- Windows — MSYS2: `pacman -S mingw-w64-x86_64-brotli mingw-w64-x86_64-lcms2 mingw-w64-x86_64-pkg-config`
 
-**Windows note:** `build.zig` passes `CMAKE_PREFIX_PATH=C:/msys64/mingw64`
-and explicit `HWY_LIBRARY` / `HWY_INCLUDE_DIR` to the libjxl cmake
-configure. Without these, libjxl's `FindHWY.cmake` cannot locate the
-MSYS2-installed highway even when `JPEGXL_FORCE_SYSTEM_HWY=ON`, because
-MinGW cmake's default search paths don't include the MSYS2 prefix.
+**Windows note:** the workflow does **not** install `mingw-w64-x86_64-highway`;
+instead it builds Highway 1.2.0 from source into `/mingw64` before
+`zig build` runs. The MSYS2 package's `libhwy.pc` exposes a version that
+libjxl's `find_package(HWY 1.0.7)` rejects for unclear reasons; building
+from a pinned tag produces a `.pc` that satisfies the version check.
+
+`build.zig` also passes `CMAKE_PREFIX_PATH=C:/msys64/mingw64` and
+explicit `HWY_LIBRARY` / `HWY_INCLUDE_DIR` to the libjxl cmake configure
+as a belt-and-suspenders fallback so `FindHWY.cmake` definitely locates
+the freshly-installed highway.
 
 For a truly static distribution (zero runtime deps), re-vendor brotli,
 highway, and lcms2 into `vendor/libjxl/third_party/` and rebuild with the
