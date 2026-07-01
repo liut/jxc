@@ -174,7 +174,12 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .link_libc = true,
-            .link_libcpp = true,
+            // Zig's bundled libcxx is the right C++ runtime on macOS (matches
+            // Apple's libc++). On Linux/MinGW libjxl was built with gcc/g++
+            // → libstdc++, so we must NOT also pull in Zig's libcxx (different
+            // ABI). The explicit linkSystemLibrary("stdc++") below provides
+            // the matching runtime.
+            .link_libcpp = target.result.os.tag == .macos,
             .imports = &.{
                 .{ .name = "jxrlib", .module = jxrlib_translate.createModule() },
                 .{ .name = "libjxl", .module = libjxl_translate.createModule() },
