@@ -204,7 +204,16 @@ pub fn build(b: *std.Build) void {
     if (target.result.os.tag == .macos) {
         root_mod.linkSystemLibrary("c++", .{});
     } else {
+        // Explicitly link the libstdc++ chain. `linkSystemLibrary` alone
+        // can be dropped by --as-needed before libjxl's references are
+        // processed; listing the dependent libs by name forces them to be
+        // scanned. libgcc_s provides low-level runtime helpers (unwinding,
+        // 128-bit integer arithmetic) that libstdc++ itself depends on.
         root_mod.linkSystemLibrary("stdc++", .{});
+        root_mod.linkSystemLibrary("gcc_s", .{});
+        root_mod.linkSystemLibrary("gcc", .{});
+        root_mod.linkSystemLibrary("pthread", .{});
+        root_mod.linkSystemLibrary("m", .{});
     }
 
     b.installArtifact(exe);
