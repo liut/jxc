@@ -197,6 +197,17 @@ pub fn build(b: *std.Build) void {
     root_mod.linkSystemLibrary("lcms2", .{});
     root_mod.linkSystemLibrary("hwy", .{});
 
+    // Link the C++ runtime that matches what libjxl was actually built
+    // against. `.link_libcpp = true` links Zig's bundled libcxx, which is
+    // correct on macOS (matches Apple's libc++) but wrong on Linux/MinGW
+    // (where libjxl was built with gcc/g++ → libstdc++). The mismatched
+    // mangled symbols cause undefined-reference errors at link time.
+    if (target.result.os.tag == .macos) {
+        root_mod.linkSystemLibrary("c++", .{});
+    } else {
+        root_mod.linkSystemLibrary("stdc++", .{});
+    }
+
     b.installArtifact(exe);
 
     // ─────────────────────────────────────────────────────────────────────
