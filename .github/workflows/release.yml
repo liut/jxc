@@ -28,42 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up MSYS2 (Windows)
+      - name: Add Strawberry MinGW to PATH (Windows)
         if: matrix.msys2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            git
-            base-devel
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-cmake
-
-      - name: Add MinGW64 to PATH
-        if: matrix.msys2
-        shell: bash
-        run: echo "C:/msys64/mingw64/bin" >> "$GITHUB_PATH"
-
-      - name: Probe Strawberry's libstdc++.a (Windows)
-        if: matrix.msys2
-        shell: bash
-        run: |
-          echo "--- Strawberry gcc ---"
-          "/c/Strawberry/c/bin/gcc.exe" --version | head -1
-          echo
-          echo "--- Strawberry gcc -print-file-name=libstdc++.a ---"
-          STRDCPY=$(/c/Strawberry/c/bin/gcc.exe -print-file-name=libstdc++.a 2>&1)
-          echo "  $STRDCPY"
-          ls -la "$STRDCPY" 2>&1 || echo "  (NOT FOUND)"
-          echo
-          echo "--- Strawberry gcc -print-file-name=libstdc++.dll.a ---"
-          DLL=$(/c/Strawberry/c/bin/gcc.exe -print-file-name=libstdc++.dll.a 2>&1)
-          echo "  $DLL"
-          ls -la "$DLL" 2>&1 || echo "  (NOT FOUND)"
-          echo
-          echo "--- All libstdc* under C:/Strawberry ---"
-          find /c/Strawberry -name 'libstdc*' 2>/dev/null | head -10
+        run: echo "C:/Strawberry/c/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - uses: mlugg/setup-zig@v2
         with:
