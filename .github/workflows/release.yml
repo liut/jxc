@@ -33,6 +33,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
+          release: 2024-05-07
           update: true
           install: >-
             git
