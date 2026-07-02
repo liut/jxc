@@ -49,25 +49,20 @@ jobs:
         if: matrix.msys2
         shell: bash
         run: |
-          echo "--- MSYS env vars ---"
-          env | grep -iE "msys|gcc|pkg" 2>&1 | head -20
+          echo "--- libstdc* under C:/mingw64 ---"
+          ls -la "C:/mingw64/lib"/libstdc* 2>&1 | head -10
           echo
-          echo "--- which gcc/cmake/make (where.exe via cmd) ---"
-          cmd //c "where gcc & where cmake & where make & where g++ & where pacman" 2>&1
+          echo "--- C:/mingw64/lib gcc-lib subdir ---"
+          find "/c/mingw64/lib" -name 'libstdc*' 2>/dev/null | head -10
           echo
-          echo "--- PATH (msys2 paths) ---"
-          echo "$PATH" | tr ':' '\n' | grep -i msys
+          echo "--- gcc at C:/mingw64 reports own libstdc++ path ---"
+          "C:/mingw64/bin/gcc.exe" -print-file-name=libstdc++.a 2>&1
           echo
-          echo "--- looking for msys2 install ---"
-          ls -la "C:/msys64" 2>&1 | head -5 || echo "(no C:/msys64)"
-          ls -la "/c/_msys2" 2>&1 | head -5 || echo "(no C:/_msys2)"
-          ls -la "$HOME/_msys2" 2>&1 | head -5 || echo "(no HOME/_msys2)"
+          echo "--- gcc --version ---"
+          "C:/mingw64/bin/gcc.exe" --version 2>&1 | head -2
           echo
-          echo "--- ls any libstdc* under C:/ ---"
-          find /c -name 'libstdc*' 2>/dev/null | head -10
-          echo
-          echo "--- mingw64/lib listing (if dir exists) ---"
-          ls -la "/c/msys64/mingw64/lib" 2>/dev/null | grep -i stdc | head -10 || echo "(no msys64/mingw64/lib)"
+          echo "--- gcc's libstdc++ dir ---"
+          "C:/mingw64/bin/gcc.exe" -print-search-dirs 2>&1 | head -5
 
       - uses: goto-bus-stop/setup-zig@v2
         with:
