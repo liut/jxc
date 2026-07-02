@@ -203,13 +203,22 @@ pub fn build(b: *std.Build) void {
     // mangled symbols cause undefined-reference errors at link time.
     if (target.result.os.tag == .macos) {
         root_mod.linkSystemLibrary("c++", .{});
+    } else if (target.result.os.tag == .windows) {
+        // libjxl is C++ and was built with gcc/g++ on MinGW, so it
+        // references libstdc++. Zig ≥ 0.16 treats "stdc++" as a known
+        // C++ runtime name and just sets link_libcpp=true (which would
+        // link libcxx instead) rather than emitting -lstdc++. Add the
+        // .a directly via addObjectFile to bypass that detection.
+        root_mod.addObjectFile(.{ .cwd_relative = "/mingw64/lib/libstdc++.a" });
+        root_mod.linkSystemLibrary("gcc_s", .{});
+        root_mod.linkSystemLibrary("gcc", .{});
+        root_mod.linkSystemLibrary("pthread", .{});
+        root_mod.linkSystemLibrary("m", .{});
     } else {
-        // Explicitly link the libstdc++ chain. `linkSystemLibrary` alone
-        // can be dropped by --as-needed before libjxl's references are
-        // processed; listing the dependent libs by name forces them to be
-        // scanned. libgcc_s provides low-level runtime helpers (unwinding,
-        // 128-bit integer arithmetic) that libstdc++ itself depends on.
-        root_mod.linkSystemLibrary("stdc++", .{});
+        // Same workaround for Linux. Ubuntu ships the static libstdc++.a
+        // inside the gcc versioned directory; ubuntu-latest (24.04) is on
+        // gcc-12 by default.
+        root_mod.addObjectFile(.{ .cwd_relative = "/usr/lib/gcc/x86_64-linux-gnu/12/libstdc++.a" });
         root_mod.linkSystemLibrary("gcc_s", .{});
         root_mod.linkSystemLibrary("gcc", .{});
         root_mod.linkSystemLibrary("pthread", .{});
