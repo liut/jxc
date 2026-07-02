@@ -50,20 +50,22 @@ jobs:
         if: matrix.msys2
         shell: bash
         run: |
-          echo "--- libstdc* under C:/mingw64 ---"
-          ls -la "C:/mingw64/lib"/libstdc* 2>&1 | head -10
+          echo "--- look for any installed msys2 / mingw64 ---"
+          ls -la /c/msys64 2>/dev/null | head -3 || echo "(no /c/msys64)"
+          ls -la /c/tools/msys64 2>/dev/null | head -3 || echo "(no /c/tools/msys64)"
           echo
-          echo "--- C:/mingw64/lib gcc-lib subdir ---"
-          find "/c/mingw64/lib" -name 'libstdc*' 2>/dev/null | head -10
+          for d in /c/msys64 /c/tools/msys64 /c/_msys64 /mingw64 /usr; do
+            echo "=== $d ==="
+            ls -la "$d" 2>/dev/null | head -5 || echo "(none)"
+          done
           echo
-          echo "--- gcc at C:/mingw64 reports own libstdc++ path ---"
-          "C:/mingw64/bin/gcc.exe" -print-file-name=libstdc++.a 2>&1
+          echo "--- search for libstdc++.a anywhere ---"
+          for d in /c/msys64 /c/tools/msys64 /mingw64 /c/mingw64 /c/Strawberry; do
+            find "$d" -name 'libstdc++.a' 2>/dev/null | head -3
+          done
           echo
-          echo "--- gcc --version ---"
-          "C:/mingw64/bin/gcc.exe" --version 2>&1 | head -2
-          echo
-          echo "--- gcc's libstdc++ dir ---"
-          "C:/mingw64/bin/gcc.exe" -print-search-dirs 2>&1 | head -5
+          echo "--- msys2 setup-msys2 step ID/path info via env ---"
+          env | grep -iE 'msys2|msys|path.*mingw' | head -10
 
       - uses: mlugg/setup-zig@v2
         with:
