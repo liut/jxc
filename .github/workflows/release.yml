@@ -33,7 +33,6 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          release: 2024-05-07
           update: true
           install: >-
             git
@@ -46,26 +45,25 @@ jobs:
         shell: bash
         run: echo "C:/msys64/mingw64/bin" >> "$GITHUB_PATH"
 
-      - name: Probe Windows env
+      - name: Probe Strawberry's libstdc++.a (Windows)
         if: matrix.msys2
         shell: bash
         run: |
-          echo "--- look for any installed msys2 / mingw64 ---"
-          ls -la /c/msys64 2>/dev/null | head -3 || echo "(no /c/msys64)"
-          ls -la /c/tools/msys64 2>/dev/null | head -3 || echo "(no /c/tools/msys64)"
+          echo "--- Strawberry gcc ---"
+          "/c/Strawberry/c/bin/gcc.exe" --version | head -1
           echo
-          for d in /c/msys64 /c/tools/msys64 /c/_msys64 /mingw64 /usr; do
-            echo "=== $d ==="
-            ls -la "$d" 2>/dev/null | head -5 || echo "(none)"
-          done
+          echo "--- Strawberry gcc -print-file-name=libstdc++.a ---"
+          STRDCPY=$(/c/Strawberry/c/bin/gcc.exe -print-file-name=libstdc++.a 2>&1)
+          echo "  $STRDCPY"
+          ls -la "$STRDCPY" 2>&1 || echo "  (NOT FOUND)"
           echo
-          echo "--- search for libstdc++.a anywhere ---"
-          for d in /c/msys64 /c/tools/msys64 /mingw64 /c/mingw64 /c/Strawberry; do
-            find "$d" -name 'libstdc++.a' 2>/dev/null | head -3
-          done
+          echo "--- Strawberry gcc -print-file-name=libstdc++.dll.a ---"
+          DLL=$(/c/Strawberry/c/bin/gcc.exe -print-file-name=libstdc++.dll.a 2>&1)
+          echo "  $DLL"
+          ls -la "$DLL" 2>&1 || echo "  (NOT FOUND)"
           echo
-          echo "--- msys2 setup-msys2 step ID/path info via env ---"
-          env | grep -iE 'msys2|msys|path.*mingw' | head -10
+          echo "--- All libstdc* under C:/Strawberry ---"
+          find /c/Strawberry -name 'libstdc*' 2>/dev/null | head -10
 
       - uses: mlugg/setup-zig@v2
         with:
