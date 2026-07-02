@@ -64,9 +64,9 @@ jobs:
           echo "--- gcc's libstdc++ dir ---"
           "C:/mingw64/bin/gcc.exe" -print-search-dirs 2>&1 | head -5
 
-      - uses: goto-bus-stop/setup-zig@v2
+      - uses: mlugg/setup-zig@v2
         with:
-          version: "0.16.0"
+          version: 0.16.0
 
       - name: Build
         run: zig build -Doptimize=ReleaseSafe
