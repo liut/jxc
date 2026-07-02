@@ -209,9 +209,11 @@ pub fn build(b: *std.Build) void {
         // C++ runtime name and just sets link_libcpp=true (which would
         // link libcxx instead) rather than emitting -lstdc++. Add the
         // .a directly via addObjectFile to bypass that detection.
-        // The msys2/setup-msys2 action installs MSYS2 to C:\msys64\ by
-        // default; the static .a lives under mingw64/lib there.
-        root_mod.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libstdc++.a" });
+        // GitHub-hosted windows-latest ships Strawberry Perl's MinGW-w64
+        // 13.2.0 at C:\Strawberry\c\, with the static .a under
+        // c\lib\libstdc++.a. msys2/setup-msys2@v2 was a no-op on this
+        // runner, so we use whatever is actually on disk.
+        root_mod.addObjectFile(.{ .cwd_relative = "C:/Strawberry/c/lib/libstdc++.a" });
         root_mod.linkSystemLibrary("gcc_s", .{});
         root_mod.linkSystemLibrary("gcc", .{});
         root_mod.linkSystemLibrary("pthread", .{});
