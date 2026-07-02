@@ -45,21 +45,29 @@ jobs:
         shell: bash
         run: echo "C:/msys64/mingw64/bin" >> "$GITHUB_PATH"
 
-      - name: Probe libstdc++ locations (Windows)
+      - name: Probe Windows env
         if: matrix.msys2
         shell: bash
         run: |
-          echo "--- mingw64/lib/libstdc* files ---"
-          ls -la "C:/msys64/mingw64/lib"/libstdc* 2>&1 || echo "(none)"
+          echo "--- MSYS env vars ---"
+          env | grep -iE "msys|gcc|pkg" 2>&1 | head -20
           echo
-          echo "--- Try gcc -print-file-name=libstdc++.a ---"
-          "/c/msys64/mingw64/bin/gcc.exe" -print-file-name=libstdc++.a 2>&1
+          echo "--- which gcc/cmake/make (where.exe via cmd) ---"
+          cmd //c "where gcc & where cmake & where make & where g++ & where pacman" 2>&1
           echo
-          echo "--- Try: which gcc; gcc --version ---"
-          "/c/msys64/mingw64/bin/gcc.exe" --version 2>&1 | head -1
+          echo "--- PATH (msys2 paths) ---"
+          echo "$PATH" | tr ':' '\n' | grep -i msys
           echo
-          echo "--- gcc lib dir ---"
-          ls -la "$(dirname $(/c/msys64/mingw64/bin/gcc.exe -print-libstdc-dir 2>/dev/null))" 2>&1 | head -20
+          echo "--- looking for msys2 install ---"
+          ls -la "C:/msys64" 2>&1 | head -5 || echo "(no C:/msys64)"
+          ls -la "/c/_msys2" 2>&1 | head -5 || echo "(no C:/_msys2)"
+          ls -la "$HOME/_msys2" 2>&1 | head -5 || echo "(no HOME/_msys2)"
+          echo
+          echo "--- ls any libstdc* under C:/ ---"
+          find /c -name 'libstdc*' 2>/dev/null | head -10
+          echo
+          echo "--- mingw64/lib listing (if dir exists) ---"
+          ls -la "/c/msys64/mingw64/lib" 2>/dev/null | grep -i stdc | head -10 || echo "(no msys64/mingw64/lib)"
 
       - uses: goto-bus-stop/setup-zig@v2
         with:
